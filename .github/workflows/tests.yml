@@ -1,0 +1,42 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Style and test suite
+    runs-on: ubuntu-latest
+
+    # A login shell is required for `conda activate` to take effect.
+    defaults:
+      run:
+        shell: bash -el {0}
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Create the documented Conda environment
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          environment-file: environment.yml
+          activate-environment: ct-env
+          miniforge-version: latest
+
+      - name: Install the package
+        run: pip install -e ".[dev]"
+
+      - name: Report the environment
+        run: |
+          conda list
+          python -c "import cantera; print('Cantera', cantera.__version__)"
+
+      - name: Check style
+        run: flake8 src tests scripts examples
+
+      - name: Run the test suite
+        run: pytest -q

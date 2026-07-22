@@ -1,5 +1,7 @@
 # h2thermo
 
+[![tests](https://github.com/turkalperen/h2thermo/actions/workflows/tests.yml/badge.svg)](https://github.com/turkalperen/h2thermo/actions/workflows/tests.yml)
+
 Equilibrium thermodynamic property tables for hydrogen-fuelled gas turbine
 cycle analysis. The architecture is designed to extend to other alternative
 fuels, including sustainable aviation fuels, ammonia and methane.
