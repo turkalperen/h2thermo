@@ -83,8 +83,9 @@ states = interpolator.lookup(
 | Equivalence ratio | 0.2 to 1.0 |
 
 Outputs are the equilibrium composition and the corresponding specific
-enthalpy, entropy, specific heats, ratio of specific heats, mean molecular
-weight and density, all in SI units on a mass basis.
+enthalpy, entropy, frozen and equilibrium specific heats, ratio of specific
+heats, isentropic exponent, mean molecular weight and density, all in SI units
+on a mass basis.
 
 ## Method
 
@@ -94,19 +95,24 @@ The `h2o2.yaml` mechanism distributed with Cantera is used; it is based on the
 hydrogen kinetics of Burke et al. (2012) and includes the dissociation species
 that matter at high temperature.
 
-### Known limitations
+### Frozen and equilibrium specific heats
 
-Specific heats are currently frozen-composition values evaluated at the
-equilibrium composition. They exclude the heat capacity contributed by shifting
-dissociation equilibria. Below 2000 K the difference is under one per cent;
-at 2900 K and 1 bar the equilibrium specific heat is more than three times the
-frozen value. Shifting specific heats are the next priority.
+Both definitions are provided. `cp` and `cv` hold the composition fixed, while
+`cp_equilibrium` and `cv_equilibrium` include the heat capacity contributed by
+shifting dissociation. Below 2000 K they agree to within one per cent; at
+2900 K and 1 bar the equilibrium value is more than three times the frozen one.
+Frozen values suit fast flows such as a turbine, equilibrium values suit a
+combustor, and real behaviour lies between them.
+
+Since the isentropic exponent of a reacting mixture is not the ratio of its
+specific heats, it is reported separately as `isentropic_exponent`.
+
+### Known limitation
 
 The `h2o2.yaml` mechanism treats nitrogen as inert, so nitric oxide is absent.
 The effect on bulk properties is below 0.04 per cent and therefore negligible
-here, but the library is not suitable for emissions work as it stands.
-
-Both limitations are quantified in [docs/validation.md](docs/validation.md).
+here, but the library is not suitable for emissions work as it stands. This is
+quantified in [docs/validation.md](docs/validation.md).
 
 ## Validation
 
@@ -130,7 +136,7 @@ pytest
 
 1. Hydrogen-air property tables with validation against NASA CEA (complete)
 2. Interpolated lookup (complete)
-3. Shifting specific heats
+3. Frozen and equilibrium specific heats (complete)
 4. Additional fuels: sustainable aviation fuels, ammonia, methane
 5. Export adapters for pyCycle and T-MATS, plus generic CSV and JSON output
 6. Packaging and documentation

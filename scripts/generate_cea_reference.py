@@ -128,6 +128,9 @@ def main() -> None:
         "entropy_J_per_kg_K",
         "cp_frozen_J_per_kg_K",
         "cp_equilibrium_J_per_kg_K",
+        "cv_frozen_J_per_kg_K",
+        "cv_equilibrium_J_per_kg_K",
+        "isentropic_exponent",
     ] + [f"mole_fraction_{species}" for species in REPORTED_SPECIES]
 
     rows = []
@@ -162,6 +165,9 @@ def main() -> None:
                         f"{result.entropy * KILO:.8g}",
                         f"{result.cp_fr * KILO:.8g}",
                         f"{result.cp_eq * KILO:.8g}",
+                        f"{result.cv_fr * KILO:.8g}",
+                        f"{result.cv_eq * KILO:.8g}",
+                        f"{result.gamma_s:.8g}",
                     ]
                     + [
                         f"{float(mole_fractions[species]):.6e}"

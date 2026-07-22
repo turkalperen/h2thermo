@@ -28,9 +28,11 @@ from h2thermo.equilibrium import (
     DRY_AIR,
     create_gas,
     equilibrium_properties,
+    equilibrium_specific_heats,
 )
 
 __all__ = [
+    "EQUILIBRIUM_PROPERTY_SOURCES",
     "GridSpecification",
     "PROPERTY_NAMES",
     "ThermoTable",
@@ -44,12 +46,23 @@ PROPERTY_NAMES: tuple[str, ...] = (
     "cp",
     "cv",
     "gamma",
+    "cp_equilibrium",
+    "cv_equilibrium",
+    "isentropic_exponent",
     "mean_molecular_weight",
     "density",
 )
 
+#: Properties obtained from the shifting equilibrium calculation rather than
+#: from the state itself, mapped to their attribute on the returned object.
+EQUILIBRIUM_PROPERTY_SOURCES: dict[str, str] = {
+    "cp_equilibrium": "cp",
+    "cv_equilibrium": "cv",
+    "isentropic_exponent": "isentropic_exponent",
+}
+
 #: Format version of the persisted file, incremented on breaking changes.
-FILE_FORMAT_VERSION = 1
+FILE_FORMAT_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -225,13 +238,26 @@ class ThermoTable:
                             oxidizer=oxidizer,
                             gas=gas,
                         )
+                        shifting = equilibrium_specific_heats(
+                            float(temperature),
+                            float(pressure),
+                            float(phi),
+                            fuel=fuel,
+                            oxidizer=oxidizer,
+                            gas=gas,
+                        )
                     except (ct.CanteraError, ValueError):
                         # Leave this node as NaN and continue; the count is
                         # reported through `failed_node_count`.
                         pass
                     else:
                         for name in PROPERTY_NAMES:
-                            properties[name][i, j, k] = getattr(state, name)
+                            source = EQUILIBRIUM_PROPERTY_SOURCES.get(name)
+                            properties[name][i, j, k] = (
+                                getattr(shifting, source)
+                                if source is not None
+                                else getattr(state, name)
+                            )
                         mole_fractions[i, j, k, :] = [
                             state.mole_fractions[species]
                             for species in species_names
