@@ -79,12 +79,16 @@ states = interpolator.lookup(
 
 ## Scope
 
-| Input | Range |
-| --- | --- |
-| Fuel | Hydrogen (further fuels planned) |
-| Temperature | 200 to 3000 K |
-| Pressure | 1 to 60 bar |
-| Equivalence ratio | 0.2 to 1.0 |
+| Input | Supported | Compared against CEA |
+| --- | --- | --- |
+| Fuel | Hydrogen (further fuels planned) | Hydrogen |
+| Temperature | 200 to 3000 K | 600 to 2900 K |
+| Pressure | 1 to 60 bar | 1 to 60 bar |
+| Equivalence ratio | 0.2 to 1.0 | 0.2 to 1.0 |
+
+The solver returns results across the whole supported envelope. Outside the
+compared range the agreement with CEA reported below has not been established,
+so the temperature extremes should be treated as unverified.
 
 Outputs are the equilibrium composition and the corresponding specific
 enthalpy, entropy, frozen and equilibrium specific heats, ratio of specific
@@ -140,8 +144,8 @@ pytest
 1. Hydrogen-air property tables with validation against NASA CEA (complete)
 2. Interpolated lookup (complete)
 3. Frozen and equilibrium specific heats (complete)
-4. Additional fuels: sustainable aviation fuels, ammonia, methane
-5. Export adapters for pyCycle and T-MATS, plus generic CSV and JSON output
+4. Export adapters for pyCycle and T-MATS, plus generic CSV and JSON output
+5. Additional fuels: sustainable aviation fuels, ammonia, methane
 6. Packaging and documentation
 
 ## References
