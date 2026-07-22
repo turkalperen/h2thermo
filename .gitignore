@@ -1,0 +1,21 @@
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Packaging artifacts
+build/
+dist/
+*.egg-info/
+
+# Test and notebook caches
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Local environments (environments belong in environment.yml, not in git)
+env/
+.env/
+.venv/
+
+# Generated thermodynamic tables
+*.npz
+data/generated/

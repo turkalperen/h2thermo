@@ -1,0 +1,12 @@
+name: ct-env
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - cantera=3.2
+  - numpy
+  - scipy
+  - matplotlib
+  - pandas
+  - jupyter
+  - pytest
