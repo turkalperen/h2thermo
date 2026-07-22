@@ -136,6 +136,90 @@ acceptable for property tables. It would not be acceptable for emissions work,
 where nitric oxide is the quantity of interest, and a mechanism carrying
 nitrogen chemistry would be required.
 
+## 4. Interpolation accuracy
+
+Interpolated lookup is what makes the tables useful, and its error is separate
+from the accuracy of the underlying equilibrium data. The figures below were
+measured on a 30 x 12 x 12 grid spanning 500 to 3000 K, 1 to 60 bar and
+equivalence ratios from 0.2 to 1.0, by comparing interpolated values against
+direct equilibrium solves at randomly chosen states inside the envelope.
+
+### Bulk properties
+
+| Property | Maximum relative error | Mean |
+| --- | --- | --- |
+| Ratio of specific heats | 0.016 % | 0.004 % |
+| Frozen specific heat | 0.039 % | 0.007 % |
+| Specific entropy | 0.046 % | 0.008 % |
+| Mean molecular weight | 0.047 % | 0.005 % |
+| Density | 0.043 % | 0.004 % |
+
+Interpolation error is therefore an order of magnitude below the agreement
+with CEA, so the total error remains dominated by the underlying
+thermodynamic data rather than by tabulation.
+
+### Two choices driven by measurement
+
+**Density is derived, not interpolated.** Interpolating the density field gives
+a maximum error of 2.21 per cent, because density varies almost linearly with
+pressure and is poorly represented on a logarithmic axis. Recomputing it from
+the interpolated mean molecular weight through the ideal gas equation of state
+gives 0.043 per cent, an improvement of roughly fifty times.
+
+**Pressure is interpolated logarithmically.** The benefit is modest for bulk
+properties, reducing the maximum specific heat error from 0.022 to 0.015 per
+cent on a 50 x 20 x 20 grid, but the coordinate is the physically natural one
+and costs nothing.
+
+### Composition
+
+Interpolated mole fractions are far less accurate than bulk properties, and the
+error grows as the species becomes rarer. For the hydroxyl radical:
+
+| Mole fraction range | Maximum error | Mean |
+| --- | --- | --- |
+| above 0.01 | 0.53 % | 0.16 % |
+| 0.001 to 0.01 | 9.4 % | 0.86 % |
+| 0.0001 to 0.001 | 13.7 % | 2.4 % |
+| below 0.0001 | 41.9 % | 8.5 % |
+
+Species matter to the bulk properties in proportion to their abundance, so
+this pattern is benign for property tables. It is not acceptable when trace
+composition is itself the quantity of interest, and the equilibrium solver
+should be called directly in that case.
+
+### Grid resolution
+
+Maximum specific heat interpolation error against grid size:
+
+| Grid | Nodes | Maximum error |
+| --- | --- | --- |
+| 20 x 8 x 8 | 1280 | 0.097 % |
+| 30 x 12 x 12 | 4320 | 0.040 % |
+| 50 x 20 x 20 | 20000 | 0.015 % |
+
+Even the coarsest grid stays well inside the accuracy of the underlying data,
+so grid resolution can be chosen for file size and generation time rather than
+for accuracy.
+
+### Speed
+
+Measured against a direct solve that reuses a single Cantera solution object,
+which is the fastest way to call the solver:
+
+| Operation | Time per state | Speed-up |
+| --- | --- | --- |
+| Equilibrium solve | 99 us | 1x |
+| Scalar lookup | 34 us | 2.9x |
+| Batched lookup | 0.87 us | 115x |
+
+The scalar path is a hand written trilinear interpolation. Routing scalar
+queries through the general purpose interpolator instead costs roughly 215 us,
+which would make a single lookup slower than solving outright. The batched path
+is where the benefit is decisive, so callers with many states should pass
+arrays rather than looping.
+
+
 ## Reproducing these results
 
 ```bash
