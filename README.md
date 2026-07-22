@@ -4,21 +4,25 @@ Equilibrium thermodynamic property tables for hydrogen-fuelled gas turbine
 cycle analysis. The architecture is designed to extend to other alternative
 fuels, including sustainable aviation fuels, ammonia and methane.
 
-> **Status: early development.** The equilibrium core is implemented and
-> validated at a single reference point. Table generation, interpolation and
-> cycle-code export adapters are in progress. The public API is not yet stable.
+> **Status: early development.** Table generation, interpolated lookup and
+> validation against NASA CEA are complete for hydrogen-air. Export adapters
+> for cycle codes and support for further fuels are not yet implemented, and
+> the public API is not yet stable.
 
 ## Motivation
 
 Engine cycle analysis tools such as [pyCycle](https://github.com/OpenMDAO/pyCycle)
-and T-MATS offer a fast tabular thermodynamics path, but the supplied tables are
-prepared for conventional kerosene. Anyone modelling a hydrogen-burning engine
-must generate an equivalent dataset themselves. This has so far been done
-repeatedly as one-off work inside individual theses and papers, with no
-reusable implementation published.
+and T-MATS offer a fast tabular thermodynamics path, but the tables they ship
+with are prepared for conventional kerosene. Anyone modelling a
+hydrogen-burning engine has to generate an equivalent dataset first. Both tools
+provide example scripts for doing so, so the work is not blocked; it is instead
+repeated from scratch in each thesis and paper, and the resulting tables are
+generally used without a published statement of how far they depart from a
+reference solution.
 
-`h2thermo` aims to provide that missing component: a documented, tested and
-openly licensed generator of combustion product properties.
+`h2thermo` aims to close that gap: a documented, openly licensed generator whose
+output is validated against NASA CEA across the operating envelope, with the
+residual error measured rather than assumed.
 
 ## Installation
 
@@ -125,8 +129,7 @@ machine precision.
 
 Interpolation adds well under 0.05 per cent on top of that, an order of
 magnitude below the agreement with CEA. Full results, including the measured
-cost of the two known limitations, are in
-[docs/validation.md](docs/validation.md).
+effect of the inert-nitrogen treatment, are in [docs/validation.md](docs/validation.md).
 
 ```bash
 pytest
