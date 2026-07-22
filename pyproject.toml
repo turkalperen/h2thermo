@@ -1,0 +1,60 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "h2thermo"
+dynamic = ["version"]
+description = "Equilibrium thermodynamic property tables for hydrogen-fuelled gas turbine cycle analysis"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Alperen Turk", email = "alperenturkyedek@gmail.com" },
+]
+keywords = [
+    "hydrogen",
+    "combustion",
+    "thermodynamics",
+    "cantera",
+    "gas turbine",
+    "propulsion",
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "cantera>=3.0",
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "flake8>=6.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/turkalperen/h2thermo"
+Repository = "https://github.com/turkalperen/h2thermo"
+Issues = "https://github.com/turkalperen/h2thermo/issues"
+
+[tool.hatch.version]
+path = "src/h2thermo/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/h2thermo"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers"
+
+[tool.flake8]
+max-line-length = 88
