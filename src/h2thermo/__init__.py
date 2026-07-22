@@ -11,9 +11,11 @@ from h2thermo.equilibrium import (
     DEFAULT_MECHANISM,
     DRY_AIR,
     EquilibriumProperties,
+    EquilibriumSpecificHeats,
     adiabatic_flame_temperature,
     create_gas,
     equilibrium_properties,
+    equilibrium_specific_heats,
 )
 from h2thermo.interpolation import (
     INTERPOLATED_PROPERTIES,
@@ -36,6 +38,7 @@ __all__ = [
     "INTERPOLATED_PROPERTIES",
     "PROPERTY_NAMES",
     "EquilibriumProperties",
+    "EquilibriumSpecificHeats",
     "GridSpecification",
     "InterpolatedState",
     "ThermoInterpolator",
@@ -44,5 +47,6 @@ __all__ = [
     "adiabatic_flame_temperature",
     "create_gas",
     "equilibrium_properties",
+    "equilibrium_specific_heats",
     "report_progress",
 ]

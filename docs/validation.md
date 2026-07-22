@@ -59,7 +59,11 @@ python scripts/generate_cea_reference.py
 | Mean molecular weight | 0.052 % | 0.011 % |
 | Density | 0.052 % | 0.012 % |
 | Specific entropy | 0.032 % | 0.017 % |
-| Frozen specific heat | 0.147 % | 0.060 % |
+| Frozen specific heat at constant pressure | 0.147 % | 0.060 % |
+| Frozen specific heat at constant volume | 0.196 % | 0.080 % |
+| Equilibrium specific heat at constant pressure | 0.556 % | 0.207 % |
+| Equilibrium specific heat at constant volume | 0.630 % | 0.236 % |
+| Isentropic exponent | 0.080 % | 0.032 % |
 | Specific enthalpy | 11.4 kJ/kg absolute | 2.2 kJ/kg |
 
 Enthalpy is reported as an absolute deviation because the absolute specific
@@ -91,12 +95,25 @@ Stoichiometric hydrogen-air ignited from ambient conditions at 1 atm reaches
 
 ## 3. Known limitations
 
-### Frozen rather than shifting specific heats
+### Two specific heat definitions, both tabulated
 
-The tabulated `cp` is a frozen-composition value evaluated at the equilibrium
-composition. It excludes the heat capacity contributed by the shifting
-dissociation equilibrium. CEA reports both quantities, which allows the
-omission to be measured directly.
+`cp` and `cv` are frozen-composition values, holding the composition fixed.
+`cp_equilibrium` and `cv_equilibrium` include the heat capacity contributed by
+the shifting dissociation equilibrium. Both are physically meaningful limits:
+frozen values apply when the flow is too fast for the chemistry to respond, as
+in a turbine, and equilibrium values apply when the composition has time to
+adjust, as in a combustor. Real behaviour lies between them, which is why CEA
+reports both and this library follows suit.
+
+The equilibrium quantities are obtained from central differences of the
+enthalpy and specific volume, at a cost of four additional equilibrium solves
+per state. Results are insensitive to the differencing step over at least two
+orders of magnitude, from 0.1 to 10 K.
+
+Because the isentropic exponent of a reacting mixture is not the ratio of its
+specific heats, it is computed separately from the volume derivatives and
+reported as `isentropic_exponent`. It agrees with CEA to 0.08 per cent, the
+closest agreement of any quantity in this library.
 
 Ratio of equilibrium to frozen specific heat at stoichiometric conditions:
 
@@ -105,16 +122,14 @@ Ratio of equilibrium to frozen specific heat at stoichiometric conditions:
 | 2600 K | 2.07 | 1.57 | 1.34 | 1.23 |
 | 2900 K | 3.33 | 2.19 | 1.69 | 1.45 |
 
-Below roughly 2000 K the two differ by less than one per cent, so the current
-tables are appropriate there. Above that the difference cannot be ignored, and
-users performing combustor exit calculations should be aware of it.
+Below roughly 2000 K the two differ by less than one per cent. Above that the
+choice between them matters, and callers should pick the definition that suits
+the process they are modelling.
 
 The pressure dependence is itself a useful check on the data. Dissociation
 increases the number of moles, so raising the pressure suppresses it, and the
 shifting contribution shrinks accordingly. The reference data reproduces this
 trend, which the test suite asserts explicitly.
-
-Adding shifting specific heats is the highest priority item on the roadmap.
 
 ### Absent nitrogen chemistry
 
@@ -149,6 +164,7 @@ direct equilibrium solves at randomly chosen states inside the envelope.
 | Property | Maximum relative error | Mean |
 | --- | --- | --- |
 | Ratio of specific heats | 0.016 % | 0.004 % |
+| Isentropic exponent | 0.019 % | 0.005 % |
 | Frozen specific heat | 0.039 % | 0.007 % |
 | Specific entropy | 0.046 % | 0.008 % |
 | Mean molecular weight | 0.047 % | 0.005 % |

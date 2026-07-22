@@ -3,8 +3,12 @@
 import numpy as np
 import pytest
 
-from h2thermo.equilibrium import equilibrium_properties
+from h2thermo.equilibrium import (
+    equilibrium_properties,
+    equilibrium_specific_heats,
+)
 from h2thermo.table import (
+    EQUILIBRIUM_PROPERTY_SOURCES,
     PROPERTY_NAMES,
     GridSpecification,
     ThermoTable,
@@ -79,17 +83,35 @@ class TestGeneration:
         assert np.allclose(totals, 1.0, rtol=1.0e-9)
 
     def test_tabulated_values_match_a_direct_solver_call(self, table, grid):
-        """A spot check that the table stores what the solver returned."""
+        """A spot check that the table stores what the solvers returned."""
         i, j, k = 2, 1, 2
-        reference = equilibrium_properties(
+        state = (
             float(grid.temperature[i]),
             float(grid.pressure[j]),
             float(grid.equivalence_ratio[k]),
         )
+        reference = equilibrium_properties(*state)
+        shifting = equilibrium_specific_heats(*state)
+
         for name in PROPERTY_NAMES:
-            assert table.properties[name][i, j, k] == pytest.approx(
-                getattr(reference, name)
+            source = EQUILIBRIUM_PROPERTY_SOURCES.get(name)
+            expected = (
+                getattr(shifting, source)
+                if source is not None
+                else getattr(reference, name)
             )
+            assert table.properties[name][i, j, k] == pytest.approx(expected), name
+
+    def test_equilibrium_specific_heat_exceeds_the_frozen_one(self, table):
+        """Shifting equilibrium can only add heat capacity, never remove it."""
+        frozen = table.properties["cp"]
+        equilibrium = table.properties["cp_equilibrium"]
+        assert np.all(equilibrium >= frozen - 1.0e-6)
+
+    def test_isentropic_exponent_stays_physical(self, table):
+        exponent = table.properties["isentropic_exponent"]
+        assert np.all(exponent > 1.0)
+        assert np.all(exponent < 1.7)
 
     def test_metadata_records_provenance(self, table):
         assert table.metadata["fuel"] == "H2"

@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 
 from h2thermo import equilibrium_properties
+from h2thermo.equilibrium import equilibrium_specific_heats
 
 REFERENCE_PATH = (
     Path(__file__).resolve().parent.parent / "data" / "cea_reference_points.csv"
@@ -29,6 +30,12 @@ MOLECULAR_WEIGHT_TOLERANCE = 1.0e-3
 DENSITY_TOLERANCE = 1.0e-3
 ENTROPY_TOLERANCE = 1.0e-3
 FROZEN_CP_TOLERANCE = 5.0e-3
+
+#: Tolerances on the shifting equilibrium quantities. These are looser than
+#: the frozen ones because they depend on radical concentrations, which the
+#: two thermodynamic databases reproduce less closely than bulk composition.
+EQUILIBRIUM_SPECIFIC_HEAT_TOLERANCE = 2.0e-2
+ISENTROPIC_EXPONENT_TOLERANCE = 3.0e-3
 
 #: Absolute tolerance on specific enthalpy in J/kg. A relative tolerance is
 #: unsuitable because the absolute enthalpy passes through zero within the
@@ -88,6 +95,16 @@ def reference_point(request) -> dict[str, str]:
 
 
 @pytest.fixture
+def shifting(reference_point):
+    """Evaluate the shifting equilibrium quantities at the reference state."""
+    return equilibrium_specific_heats(
+        float(reference_point["temperature_K"]),
+        float(reference_point["pressure_Pa"]),
+        float(reference_point["equivalence_ratio"]),
+    )
+
+
+@pytest.fixture
 def computed(reference_point):
     """Evaluate h2thermo at the state of the current reference point."""
     return equilibrium_properties(
@@ -130,6 +147,34 @@ def test_frozen_specific_heat(reference_point, computed):
     assert computed.cp == pytest.approx(expected, rel=FROZEN_CP_TOLERANCE)
 
 
+def test_frozen_specific_heat_at_constant_volume(reference_point, computed):
+    expected = float(reference_point["cv_frozen_J_per_kg_K"])
+    assert computed.cv == pytest.approx(expected, rel=FROZEN_CP_TOLERANCE)
+
+
+def test_equilibrium_specific_heat(reference_point, shifting):
+    """The shifting cp must match CEA's equilibrium value."""
+    expected = float(reference_point["cp_equilibrium_J_per_kg_K"])
+    assert shifting.cp == pytest.approx(
+        expected, rel=EQUILIBRIUM_SPECIFIC_HEAT_TOLERANCE
+    )
+
+
+def test_equilibrium_specific_heat_at_constant_volume(reference_point, shifting):
+    expected = float(reference_point["cv_equilibrium_J_per_kg_K"])
+    assert shifting.cv == pytest.approx(
+        expected, rel=EQUILIBRIUM_SPECIFIC_HEAT_TOLERANCE
+    )
+
+
+def test_isentropic_exponent(reference_point, shifting):
+    """The exponent required by compressible flow relations."""
+    expected = float(reference_point["isentropic_exponent"])
+    assert shifting.isentropic_exponent == pytest.approx(
+        expected, rel=ISENTROPIC_EXPONENT_TOLERANCE
+    )
+
+
 def test_stable_species_composition(reference_point, computed):
     for species in STABLE_SPECIES:
         expected = float(reference_point[f"mole_fraction_{species}"])
@@ -150,13 +195,12 @@ def test_radical_species_composition(reference_point, computed):
         ), species
 
 
-def test_tabulated_cp_is_the_frozen_value_not_the_equilibrium_one():
-    """Document the known limitation as an executable assertion.
+def test_the_two_specific_heat_definitions_diverge_at_high_temperature():
+    """The two definitions are far apart where dissociation is active.
 
-    At high temperature and low pressure the equilibrium specific heat reported
-    by CEA is several times the frozen value that h2thermo currently tabulates.
-    This test pins that expectation so the difference cannot be forgotten, and
-    will need updating when shifting specific heats are added.
+    Both are tabulated, so this is no longer a limitation. The test remains as
+    a guard: if the two ever coincided at these conditions, one of them would
+    be wrong.
     """
     hot_and_low_pressure = [
         point

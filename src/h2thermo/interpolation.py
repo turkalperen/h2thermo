@@ -38,6 +38,9 @@ INTERPOLATED_PROPERTIES: tuple[str, ...] = (
     "cp",
     "cv",
     "gamma",
+    "cp_equilibrium",
+    "cv_equilibrium",
+    "isentropic_exponent",
     "mean_molecular_weight",
 )
 
@@ -67,7 +70,16 @@ class InterpolatedState:
     cv : float or numpy.ndarray
         Frozen-composition specific heat at constant volume in J/(kg K).
     gamma : float or numpy.ndarray
-        Ratio of specific heats.
+        Frozen-composition ratio of specific heats.
+    cp_equilibrium : float or numpy.ndarray
+        Specific heat at constant pressure including the shifting equilibrium
+        contribution, in J/(kg K).
+    cv_equilibrium : float or numpy.ndarray
+        Specific heat at constant volume including the shifting equilibrium
+        contribution, in J/(kg K).
+    isentropic_exponent : float or numpy.ndarray
+        Exponent relating pressure and specific volume along an isentrope of
+        the reacting mixture.
     mean_molecular_weight : float or numpy.ndarray
         Mean molecular weight in kg/kmol.
     density : float or numpy.ndarray
@@ -82,6 +94,9 @@ class InterpolatedState:
     cp: float | np.ndarray
     cv: float | np.ndarray
     gamma: float | np.ndarray
+    cp_equilibrium: float | np.ndarray
+    cv_equilibrium: float | np.ndarray
+    isentropic_exponent: float | np.ndarray
     mean_molecular_weight: float | np.ndarray
     density: float | np.ndarray
 
@@ -343,6 +358,9 @@ class ThermoInterpolator:
             cp=finish(properties["cp"]),
             cv=finish(properties["cv"]),
             gamma=finish(properties["gamma"]),
+            cp_equilibrium=finish(properties["cp_equilibrium"]),
+            cv_equilibrium=finish(properties["cv_equilibrium"]),
+            isentropic_exponent=finish(properties["isentropic_exponent"]),
             mean_molecular_weight=finish(properties["mean_molecular_weight"]),
             density=finish(density),
         )

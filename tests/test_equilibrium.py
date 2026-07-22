@@ -16,6 +16,7 @@ from h2thermo import (
     create_gas,
     equilibrium_properties,
 )
+from h2thermo.equilibrium import equilibrium_specific_heats
 
 AMBIENT_TEMPERATURE = 298.15  # K
 AMBIENT_PRESSURE = ct.one_atm  # Pa
@@ -108,3 +109,83 @@ def test_invalid_inputs_are_rejected(kwargs, gas):
     """Non-physical inputs must raise instead of returning silent garbage."""
     with pytest.raises(ValueError):
         equilibrium_properties(gas=gas, **kwargs)
+
+
+class TestEquilibriumSpecificHeats:
+    """Specific heats that account for a shifting chemical equilibrium."""
+
+    def test_equals_the_frozen_value_when_nothing_dissociates(self, gas):
+        """Below the onset of dissociation the two definitions must coincide."""
+        state = equilibrium_properties(
+            800.0, AMBIENT_PRESSURE, equivalence_ratio=0.5, gas=gas
+        )
+        shifting = equilibrium_specific_heats(
+            800.0, AMBIENT_PRESSURE, equivalence_ratio=0.5, gas=gas
+        )
+        assert shifting.cp == pytest.approx(state.cp, rel=1.0e-3)
+        assert shifting.cv == pytest.approx(state.cv, rel=1.0e-3)
+        assert shifting.isentropic_exponent == pytest.approx(
+            state.gamma, rel=1.0e-3
+        )
+
+    def test_exceeds_the_frozen_value_once_dissociation_matters(self, gas):
+        """Breaking bonds absorbs energy, so the equilibrium value is larger."""
+        state = equilibrium_properties(
+            2800.0, AMBIENT_PRESSURE, equivalence_ratio=1.0, gas=gas
+        )
+        shifting = equilibrium_specific_heats(
+            2800.0, AMBIENT_PRESSURE, equivalence_ratio=1.0, gas=gas
+        )
+        assert shifting.cp > 2.0 * state.cp
+
+    def test_contribution_falls_with_pressure(self, gas):
+        """Pressure suppresses dissociation, and with it the extra capacity."""
+        ratios = []
+        for pressure in (1.0e5, 10.0e5, 60.0e5):
+            state = equilibrium_properties(
+                2800.0, pressure, equivalence_ratio=1.0, gas=gas
+            )
+            shifting = equilibrium_specific_heats(
+                2800.0, pressure, equivalence_ratio=1.0, gas=gas
+            )
+            ratios.append(shifting.cp / state.cp)
+        assert ratios == sorted(ratios, reverse=True)
+
+    @pytest.mark.parametrize("step", [0.2, 1.0, 5.0])
+    def test_result_is_insensitive_to_the_temperature_step(self, gas, step):
+        """A derivative that moved with the step size would be unreliable."""
+        reference = equilibrium_specific_heats(
+            2400.0, AMBIENT_PRESSURE, equivalence_ratio=1.0, gas=gas
+        )
+        varied = equilibrium_specific_heats(
+            2400.0,
+            AMBIENT_PRESSURE,
+            equivalence_ratio=1.0,
+            gas=gas,
+            temperature_step=step,
+        )
+        assert varied.cp == pytest.approx(reference.cp, rel=1.0e-3)
+
+    def test_specific_heats_stay_ordered(self, gas):
+        shifting = equilibrium_specific_heats(
+            2200.0, 20.0e5, equivalence_ratio=0.7, gas=gas
+        )
+        assert shifting.cp > shifting.cv > 0.0
+        assert 1.0 < shifting.isentropic_exponent < 1.7
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"temperature": 0.5, "pressure": 1.0e5, "equivalence_ratio": 1.0},
+            {"temperature": 1000.0, "pressure": -1.0, "equivalence_ratio": 1.0},
+            {
+                "temperature": 1000.0,
+                "pressure": 1.0e5,
+                "equivalence_ratio": 1.0,
+                "relative_pressure_step": 2.0,
+            },
+        ],
+    )
+    def test_invalid_inputs_are_rejected(self, gas, kwargs):
+        with pytest.raises(ValueError):
+            equilibrium_specific_heats(gas=gas, **kwargs)
