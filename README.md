@@ -49,6 +49,30 @@ state = equilibrium_properties(
 print(f"cp = {state.cp:.1f} J/(kg K), gamma = {state.gamma:.4f}")
 ```
 
+Generating a table and querying it:
+
+```python
+import numpy as np
+
+from h2thermo import GridSpecification, ThermoInterpolator, ThermoTable
+
+grid = GridSpecification(
+    temperature=np.linspace(500.0, 3000.0, 30),
+    pressure=np.geomspace(1.0e5, 60.0e5, 12),
+    equivalence_ratio=np.linspace(0.2, 1.0, 12),
+)
+table = ThermoTable.generate(grid)
+table.save("data/generated/h2_air_table.npz")
+
+interpolator = ThermoInterpolator(table)
+
+# A single state, or many at once.
+state = interpolator.lookup(1837.0, 13.7e5, 0.63)
+states = interpolator.lookup(
+    np.linspace(1000.0, 2500.0, 1000), 20.0e5, 0.6
+)
+```
+
 ## Scope
 
 | Input | Range |
@@ -93,7 +117,9 @@ molecular weight and density agree to within 0.06 per cent, entropy to within
 consistency checks on element conservation and the equation of state hold to
 machine precision.
 
-Full results, including the measured cost of the two known limitations, are in
+Interpolation adds well under 0.05 per cent on top of that, an order of
+magnitude below the agreement with CEA. Full results, including the measured
+cost of the two known limitations, are in
 [docs/validation.md](docs/validation.md).
 
 ```bash
@@ -103,10 +129,11 @@ pytest
 ## Roadmap
 
 1. Hydrogen-air property tables with validation against NASA CEA (complete)
-2. Shifting specific heats
-3. Additional fuels: sustainable aviation fuels, ammonia, methane
-4. Export adapters for pyCycle and T-MATS, plus generic CSV and JSON output
-5. Packaging and documentation
+2. Interpolated lookup (complete)
+3. Shifting specific heats
+4. Additional fuels: sustainable aviation fuels, ammonia, methane
+5. Export adapters for pyCycle and T-MATS, plus generic CSV and JSON output
+6. Packaging and documentation
 
 ## References
 
