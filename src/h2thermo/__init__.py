@@ -15,6 +15,12 @@ from h2thermo.equilibrium import (
     create_gas,
     equilibrium_properties,
 )
+from h2thermo.table import (
+    PROPERTY_NAMES,
+    GridSpecification,
+    ThermoTable,
+    report_progress,
+)
 
 __version__ = "0.1.0.dev0"
 
@@ -22,9 +28,13 @@ __all__ = [
     "DEFAULT_FUEL",
     "DEFAULT_MECHANISM",
     "DRY_AIR",
+    "PROPERTY_NAMES",
     "EquilibriumProperties",
+    "GridSpecification",
+    "ThermoTable",
     "__version__",
     "adiabatic_flame_temperature",
     "create_gas",
     "equilibrium_properties",
+    "report_progress",
 ]
