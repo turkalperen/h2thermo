@@ -70,19 +70,31 @@ The `h2o2.yaml` mechanism distributed with Cantera is used; it is based on the
 hydrogen kinetics of Burke et al. (2012) and includes the dissociation species
 that matter at high temperature.
 
-### Known limitation
+### Known limitations
 
 Specific heats are currently frozen-composition values evaluated at the
-equilibrium composition. They exclude the additional heat capacity contributed
-by shifting dissociation equilibria, which becomes significant above roughly
-2000 K. Equilibrium (shifting) specific heats are planned.
+equilibrium composition. They exclude the heat capacity contributed by shifting
+dissociation equilibria. Below 2000 K the difference is under one per cent;
+at 2900 K and 1 bar the equilibrium specific heat is more than three times the
+frozen value. Shifting specific heats are the next priority.
+
+The `h2o2.yaml` mechanism treats nitrogen as inert, so nitric oxide is absent.
+The effect on bulk properties is below 0.04 per cent and therefore negligible
+here, but the library is not suitable for emissions work as it stands.
+
+Both limitations are quantified in [docs/validation.md](docs/validation.md).
 
 ## Validation
 
-The test suite pins the adiabatic flame temperature of stoichiometric
-hydrogen-air at ambient conditions against the accepted literature value of
-approximately 2400 K. Broader comparison against NASA CEA reference points is
-planned.
+Properties are validated against NASA CEA over 140 reference states spanning
+600 to 2900 K, 1 to 60 bar and equivalence ratios from 0.2 to 1.0. Mean
+molecular weight and density agree to within 0.06 per cent, entropy to within
+0.04 per cent and frozen specific heat to within 0.15 per cent. Internal
+consistency checks on element conservation and the equation of state hold to
+machine precision.
+
+Full results, including the measured cost of the two known limitations, are in
+[docs/validation.md](docs/validation.md).
 
 ```bash
 pytest
@@ -90,10 +102,11 @@ pytest
 
 ## Roadmap
 
-1. Hydrogen-air property tables with validation against NASA CEA
-2. Additional fuels: sustainable aviation fuels, ammonia, methane
-3. Export adapters for pyCycle and T-MATS, plus generic CSV and JSON output
-4. Packaging and documentation
+1. Hydrogen-air property tables with validation against NASA CEA (complete)
+2. Shifting specific heats
+3. Additional fuels: sustainable aviation fuels, ammonia, methane
+4. Export adapters for pyCycle and T-MATS, plus generic CSV and JSON output
+5. Packaging and documentation
 
 ## References
 
