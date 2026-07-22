@@ -19,3 +19,6 @@ env/
 # Generated thermodynamic tables
 *.npz
 data/generated/
+
+# VSCode Settings
+.vscode
