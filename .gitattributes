@@ -1,0 +1,8 @@
+# Normalize line endings to LF inside the repository.
+# Working copies still use the platform-native convention.
+* text=auto
+
+# Files that must keep LF endings regardless of platform.
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
