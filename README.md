@@ -8,8 +8,8 @@ fuels, including sustainable aviation fuels, ammonia and methane.
 
 > **Status: early development.** Table generation, interpolated lookup,
 > validation against NASA CEA and a pyCycle export adapter are complete for
-> hydrogen-air. The exported table does not yet include a pure-air (zero
-> equivalence ratio) row; T-MATS export, further fuels and a stable public
+> hydrogen-air, including a pure-air (zero equivalence ratio) row for
+> unburned engine sections. T-MATS export, further fuels and a stable public
 > API are not yet implemented.
 
 ## Motivation
@@ -87,7 +87,7 @@ states = interpolator.lookup(
 | Fuel | Hydrogen (further fuels planned) | Hydrogen |
 | Temperature | 200 to 3000 K | 600 to 2900 K |
 | Pressure | 1 to 60 bar | 1 to 60 bar |
-| Equivalence ratio | 0.2 to 1.0 | 0.2 to 1.0 |
+| Equivalence ratio | 0 to 1.0 (0 = pure oxidizer, no fuel) | 0.2 to 1.0 |
 
 The solver returns results across the whole supported envelope. Outside the
 compared range the agreement with CEA reported below has not been established,
@@ -118,13 +118,6 @@ combustor, and real behaviour lies between them.
 Since the isentropic exponent of a reacting mixture is not the ratio of its
 specific heats, it is reported separately as `isentropic_exponent`.
 
-### Known limitation
-
-`GridSpecification` requires a strictly positive equivalence ratio, so an
-exported table never has pyCycle's `FAR = 0` (pure air) row. A full engine
-model that includes unburned sections such as an inlet or compressor needs
-that row. See [`h2thermo.export.pycycle`](src/h2thermo/export/pycycle.py) for
-details.
 
 ## Validation
 

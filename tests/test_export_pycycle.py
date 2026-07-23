@@ -34,6 +34,18 @@ def table() -> ThermoTable:
     return ThermoTable.generate(grid)
 
 
+@pytest.fixture(scope="module")
+def table_with_pure_air() -> ThermoTable:
+    """A table whose equivalence_ratio axis includes the pure-air row."""
+    grid = GridSpecification.linear(
+        temperature_range=(300.0, 2800.0),
+        pressure_range=(1.0e5, 40.0e5),
+        equivalence_ratio_range=(0.0, 1.0),
+        shape=(4, 3, 3),
+    )
+    return ThermoTable.generate(grid)
+
+
 class TestStoichiometricFuelAirRatio:
     """Conversion from equivalence ratio to pyCycle's fuel-air ratio."""
 
@@ -128,3 +140,29 @@ class TestWritePycycleTable:
 
         with pytest.raises(ValueError, match="non-convergent"):
             write_pycycle_table(broken, tmp_path / "table.pkl")
+
+
+class TestPureAirRowExport:
+    """The FAR=0 row pyCycle's own air/Jet-A table has, and a full engine
+    model needs for unburned sections such as an inlet or compressor."""
+
+    def test_far_axis_starts_at_zero(self, table_with_pure_air, tmp_path):
+        path = write_pycycle_table(table_with_pure_air, tmp_path / "table.pkl")
+        with path.open("rb") as handle:
+            payload = pickle.load(handle)
+
+        assert payload["FAR"][0] == 0.0
+
+    def test_far_zero_slice_has_no_negative_specific_heats(
+        self, table_with_pure_air, tmp_path
+    ):
+        # A minimal sanity check that the pure-air row survived the export
+        # mapping intact, without re-deriving the full physics already
+        # covered by TestPureOxidizer in tests/test_equilibrium.py.
+        path = write_pycycle_table(table_with_pure_air, tmp_path / "table.pkl")
+        with path.open("rb") as handle:
+            payload = pickle.load(handle)
+
+        assert np.all(payload["Cp"][0, :, :] > 0.0)
+        assert np.all(payload["Cv"][0, :, :] > 0.0)
+        assert np.all(payload["R"][0, :, :] > 0.0)

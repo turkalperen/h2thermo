@@ -111,6 +111,72 @@ def test_invalid_inputs_are_rejected(kwargs, gas):
         equilibrium_properties(gas=gas, **kwargs)
 
 
+class TestPureOxidizer:
+    """Equivalence ratio of zero: pure oxidizer, no fuel present.
+
+    This is the state pyCycle's tabular thermo format calls its ``FAR = 0``
+    row, needed for engine sections such as an inlet or compressor that
+    never see fuel.
+    """
+
+    #: Accepted handbook value for the specific heat of dry air near room
+    #: temperature. The simplified two-component oxidizer used here (O2/N2
+    #: only, no argon) agrees to within half a percent.
+    REFERENCE_AIR_CP = 1005.0  # J/(kg K)
+
+    def test_matches_the_oxidizer_composition_exactly(self, gas):
+        """With no fuel, equilibrium composition is just the oxidizer."""
+        state = equilibrium_properties(
+            300.0, AMBIENT_PRESSURE, equivalence_ratio=0.0, gas=gas
+        )
+        assert state.mole_fractions["O2"] == pytest.approx(1.0 / 4.76, rel=1.0e-6)
+        assert state.mole_fractions["N2"] == pytest.approx(3.76 / 4.76, rel=1.0e-6)
+        for species in ("H2", "H", "OH", "H2O", "HO2", "H2O2"):
+            assert state.mole_fractions[species] < 1.0e-12
+
+    def test_specific_heat_matches_air_near_room_temperature(self, gas):
+        """Below the onset of dissociation this is just the cp of air."""
+        state = equilibrium_properties(
+            300.0, AMBIENT_PRESSURE, equivalence_ratio=0.0, gas=gas
+        )
+        assert state.cp == pytest.approx(self.REFERENCE_AIR_CP, rel=1.0e-2)
+
+    def test_oxygen_dissociates_at_high_temperature(self, gas):
+        """Even fuel-free air dissociates once it is hot enough."""
+        cool = equilibrium_properties(
+            300.0, AMBIENT_PRESSURE, equivalence_ratio=0.0, gas=gas
+        )
+        hot = equilibrium_properties(
+            2900.0, AMBIENT_PRESSURE, equivalence_ratio=0.0, gas=gas
+        )
+        assert hot.mole_fractions["O"] > cool.mole_fractions["O"]
+        assert hot.mole_fractions["O2"] < cool.mole_fractions["O2"]
+
+    def test_equilibrium_specific_heats_accepts_zero(self, gas):
+        """The shifting-composition path must accept a fuel-free mixture too."""
+        shifting = equilibrium_specific_heats(
+            2900.0, AMBIENT_PRESSURE, equivalence_ratio=0.0, gas=gas
+        )
+        assert shifting.cp > 0.0
+        assert shifting.cv > 0.0
+        assert 1.0 < shifting.isentropic_exponent < 1.7
+
+    def test_adiabatic_flame_temperature_equals_inlet(self, gas):
+        """With no fuel, nothing burns, so the temperature cannot change."""
+        inlet_temperature = 500.0
+        result = adiabatic_flame_temperature(
+            inlet_temperature, AMBIENT_PRESSURE, equivalence_ratio=0.0, gas=gas
+        )
+        assert result == pytest.approx(inlet_temperature, abs=1.0e-6)
+
+    def test_negative_equivalence_ratio_is_still_rejected(self, gas):
+        """Zero is a valid boundary; negative fuel content is not."""
+        with pytest.raises(ValueError):
+            equilibrium_properties(
+                1000.0, AMBIENT_PRESSURE, equivalence_ratio=-0.1, gas=gas
+            )
+
+
 class TestEquilibriumSpecificHeats:
     """Specific heats that account for a shifting chemical equilibrium."""
 
