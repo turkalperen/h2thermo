@@ -6,10 +6,11 @@ Equilibrium thermodynamic property tables for hydrogen-fuelled gas turbine
 cycle analysis. The architecture is designed to extend to other alternative
 fuels, including sustainable aviation fuels, ammonia and methane.
 
-> **Status: early development.** Table generation, interpolated lookup and
-> validation against NASA CEA are complete for hydrogen-air. Export adapters
-> for cycle codes and support for further fuels are not yet implemented, and
-> the public API is not yet stable.
+> **Status: early development.** Table generation, interpolated lookup,
+> validation against NASA CEA and a pyCycle export adapter are complete for
+> hydrogen-air. The exported table does not yet include a pure-air (zero
+> equivalence ratio) row; T-MATS export, further fuels and a stable public
+> API are not yet implemented.
 
 ## Motivation
 
@@ -119,10 +120,11 @@ specific heats, it is reported separately as `isentropic_exponent`.
 
 ### Known limitation
 
-The `h2o2.yaml` mechanism treats nitrogen as inert, so nitric oxide is absent.
-The effect on bulk properties is below 0.04 per cent and therefore negligible
-here, but the library is not suitable for emissions work as it stands. This is
-quantified in [docs/validation.md](docs/validation.md).
+`GridSpecification` requires a strictly positive equivalence ratio, so an
+exported table never has pyCycle's `FAR = 0` (pure air) row. A full engine
+model that includes unburned sections such as an inlet or compressor needs
+that row. See [`h2thermo.export.pycycle`](src/h2thermo/export/pycycle.py) for
+details.
 
 ## Validation
 
@@ -146,7 +148,7 @@ pytest
 1. Hydrogen-air property tables with validation against NASA CEA (complete)
 2. Interpolated lookup (complete)
 3. Frozen and equilibrium specific heats (complete)
-4. Export adapters for pyCycle and T-MATS, plus generic CSV and JSON output
+4. Export adapter for pyCycle (complete); T-MATS and generic CSV/JSON output remaining
 5. Additional fuels: sustainable aviation fuels, ammonia, methane
 6. Packaging and documentation
 
