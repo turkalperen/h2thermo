@@ -1,0 +1,326 @@
+# PR-5
+## Summary
+- Determine, by reading pyCycle's own shipped reference table (`pycycle.constants.AIR_JETA_TAB_SPEC`) rather than assuming, that its tabular thermo format stores equilibrium (shifting-composition) `Cp`/`Cv` and an independently evaluated isentropic exponent as `gamma` -- not the frozen values or their ratio. Measured with `scripts/probe_pycycle_definitions.py` and recorded in `docs/validation.md` section 5, replacing an earlier version of that script that drove a live, version-fragile OpenMDAO model instead of the shipped artifact.
+- Add `h2thermo.export.pycycle.write_pycycle_table`, which writes a `ThermoTable` in the pickle format pyCycle's tabular thermo mode reads: `Cp`/`Cv`/`gamma` mapped per the measured result above, the equivalence-ratio axis converted to fuel-air ratio via a mechanism-derived stoichiometric constant, and the specific gas constant recovered from mean molecular weight.
+- Known limitation, documented in the module docstring: `GridSpecification` requires equivalence ratio > 0, so an exported table never has pyCycle's `FAR = 0` (pure air) row.
+
+## Test plan
+- [x] `pytest` -- 1612 passed
+- [x] `flake8 src tests scripts examples` -- clean
+- [x] `python scripts/probe_pycycle_definitions.py` (requires `pip install om-pycycle`) -- reproduces the measured discriminator values in `docs/validation.md` section 5
+
+# PR-4
+Adds specific heats that account for shifting chemical equilibrium, closing the
+largest outstanding gap in the physics. What was previously documented as a
+limitation is now a deliberate choice between two tabulated definitions.
+
+## What is included
+
+- `equilibrium_specific_heats()`: shifting `cp`, `cv` and the isentropic
+  exponent at a single state
+- Three new tabulated fields: `cp_equilibrium`, `cv_equilibrium`,
+  `isentropic_exponent`, available through both the table and the interpolator
+- The CEA reference file gains columns for frozen `cv`, equilibrium `cv` and
+  the isentropic exponent
+- 572 new tests, giving 1603 in total
+- File format version raised to 2
+
+## Why both definitions are kept
+
+Frozen and equilibrium specific heats are both physically meaningful limits
+rather than an approximation and a correction. Frozen values apply when the
+flow moves faster than the chemistry can respond, as in a turbine. Equilibrium
+values apply when the composition has time to adjust, as in a combustor. Real
+behaviour lies between them, which is why CEA reports both, and this library
+now follows the same convention.
+
+The previous framing, which treated the frozen value as a shortcoming, was
+misleading and has been corrected in the README and in `docs/validation.md`.
+
+## Agreement with CEA
+
+Measured across all 140 stored reference points:
+
+| Quantity | Maximum relative deviation | Mean |
+| --- | --- | --- |
+| Frozen cp | 0.147 % | 0.060 % |
+| Frozen cv | 0.196 % | 0.080 % |
+| Equilibrium cp | 0.556 % | 0.207 % |
+| Equilibrium cv | 0.630 % | 0.236 % |
+| Isentropic exponent | 0.080 % | 0.032 % |
+
+The equilibrium quantities agree less closely than the frozen ones, which is
+expected: they depend on how fast the composition shifts, and the radical
+concentrations that drive that shift are the part of the composition the two
+thermodynamic databases reproduce least closely. Tolerances in the test suite
+are tiered accordingly.
+
+## Design decisions
+
+**The isentropic exponent is computed separately, not derived from cp and cv.**
+For a reacting mixture the exponent relating pressure to specific volume along
+an isentrope is not the ratio of the specific heats, because the composition
+shifts during the process. Deriving it that way would have produced a plausible
+looking number that is wrong by several per cent in exactly the conditions
+where it matters. It is obtained instead from the volume derivatives, following
+the relations used by CEA, and agrees to 0.08 per cent, the closest agreement
+of any quantity in this library.
+
+**Derivatives are evaluated by central differences, and the step size was
+verified rather than assumed.** Varying the temperature step from 0.1 to 10 K
+changes the result only in the fourth significant figure. A test pins this,
+because a derivative that moved with the step size would be unreliable
+regardless of how well it happened to agree with a reference.
+
+**The calculation is unconditional rather than opt-in.** It costs four extra
+equilibrium solves per node, raising generation time by a factor of 4.1, so a
+full 50 x 20 x 20 grid now takes about two minutes rather than six seconds. An
+opt-in flag was considered and rejected: conditional fields would complicate
+the file format, the interpolator and the tests, and earlier measurements
+showed that even coarse grids are accurate enough that generation time is not
+a binding constraint. Two minutes is paid once.
+
+**The file format version guard earned its place.** Raising it to 2 means
+tables written by earlier versions now fail loudly instead of being read with
+three missing fields.
+
+## Tests worth noting
+
+Beyond agreement with CEA, several tests assert physical behaviour that would
+survive a change of reference data:
+
+- The equilibrium specific heat can never fall below the frozen one, since
+  shifting equilibrium only ever absorbs additional energy.
+- The two coincide below the onset of dissociation, at 800 K.
+- The gap narrows as pressure rises, because dissociation increases the number
+  of moles and is therefore suppressed by pressure.
+
+# PR-3
+
+Adds the interpolation layer, which is what makes the generated tables usable:
+properties at arbitrary states within the tabulated envelope, without solving
+for chemical equilibrium.
+
+## What is included
+
+- `ThermoInterpolator`: interpolated lookup over a `ThermoTable`
+- `InterpolatedState`: the returned property set
+- Scalar and array queries, with arguments broadcast against one another
+- `mole_fractions()` for interpolated composition
+- 19 new tests covering accuracy, the query interface, bounds and performance
+- `docs/validation.md` gains a section quantifying interpolation error
+- scipy added as a runtime dependency
+
+## Accuracy
+
+Measured on a 30 x 12 x 12 grid against direct equilibrium solves at random
+states inside the envelope:
+
+| Property | Maximum relative error |
+| --- | --- |
+| Ratio of specific heats | 0.016 % |
+| Frozen specific heat | 0.039 % |
+| Specific entropy | 0.046 % |
+| Mean molecular weight | 0.047 % |
+| Density | 0.043 % |
+
+Interpolation error is an order of magnitude below the agreement with CEA, so
+the total error stays dominated by the underlying thermodynamic data rather
+than by tabulation.
+
+## Design decisions
+
+**Density is derived from the equation of state, not interpolated.**
+Interpolating the density field directly gives a maximum error of 2.21 per
+cent, because density varies almost linearly with pressure and is therefore
+poorly represented on a logarithmic axis. Recomputing it from the interpolated
+mean molecular weight gives 0.043 per cent, an improvement of roughly fifty
+times for one line of arithmetic.
+
+**Scalar queries take a dedicated trilinear path.** Routing a single lookup
+through the general purpose interpolator costs about 215 us, which is slower
+than solving for equilibrium outright at 99 us. Since cycle codes frequently
+query one state at a time, that would have defeated the purpose of tabulation
+for the case that matters most. A hand written trilinear path brings this to
+34 us.
+
+**Out of range queries raise rather than extrapolate.** The underlying data is
+strongly non-linear outside the sampled region, so silent extrapolation would
+return plausible looking but meaningless numbers. Callers who prefer NaN can
+construct the interpolator with `bounds_error=False`.
+
+**Pressure is interpolated on a logarithmic coordinate.** This was expected to
+matter more than it does: the maximum specific heat error falls from 0.022 to
+0.015 per cent on a 50 x 20 x 20 grid. It is retained because it is the
+physically natural coordinate and costs nothing, but it is not the improvement
+it was anticipated to be.
+
+## Performance
+
+Measured against a direct solve that reuses a single Cantera solution object,
+which is the fastest way to call the solver. Comparing against the naive path,
+where a solution object is created per call, would overstate the benefit by
+roughly a factor of fifty.
+
+| Operation | Time per state | Speed-up |
+| --- | --- | --- |
+| Equilibrium solve | 99 us | 1x |
+| Scalar lookup | 34 us | 2.9x |
+| Batched lookup | 0.87 us | 115x |
+
+The batched path is where the advantage is decisive, so callers with many
+states should pass arrays rather than looping. This is documented in the
+README.
+
+## Composition accuracy is tiered, and documented as such
+
+Interpolated mole fractions degrade as the species becomes rarer. For the
+hydroxyl radical, error rises from 0.5 per cent above a mole fraction of 0.01
+to 42 per cent below 0.0001. Species influence the bulk properties in
+proportion to their abundance, so this is benign for property tables, but it
+is not acceptable when trace composition is itself the quantity of interest.
+The docstring directs those callers to the equilibrium solver.
+
+## Grid resolution
+
+Maximum specific heat interpolation error is 0.097 per cent on a 20 x 8 x 8
+grid and 0.015 per cent on 50 x 20 x 20. Even the coarsest grid stays well
+inside the accuracy of the underlying data, so resolution can be chosen for
+file size and generation time rather than for accuracy.
+
+# PR-2
+
+Adds a validation layer establishing the accuracy of the equilibrium
+properties against NASA CEA, together with documentation of the results.
+
+## What is included
+
+- `scripts/generate_cea_reference.py`: produces reference states using the
+  NASA CEA Python package
+- `data/cea_reference_points.csv`: 140 stored reference states spanning
+  600-2900 K, 1-60 bar and equivalence ratios from 0.2 to 1.0
+- `tests/test_validation.py`: compares every stored state against the library
+- `docs/validation.md`: full results, including the measured cost of both
+  known limitations
+- README updated to report the headline agreement and link to the details
+
+## Results
+
+| Property | Maximum deviation from CEA |
+| --- | --- |
+| Mean molecular weight | 0.052 % |
+| Density | 0.052 % |
+| Specific entropy | 0.032 % |
+| Frozen specific heat | 0.147 % |
+| Specific enthalpy | 11.4 kJ/kg absolute |
+
+Internal consistency checks on element conservation, the ideal gas equation of
+state and the ratio of specific heats hold to machine precision.
+
+## Design decisions
+
+**The CEA product species list is restricted to match `h2o2.yaml`.** This is
+the most consequential choice in the change. Comparing against CEA's full
+product set would conflate two independent sources of disagreement: the
+different species available to each solver, and the different thermodynamic
+databases behind them. Matching the species lists isolates the second, which is
+what the comparison is meant to measure. The cost of the restriction is then
+quantified separately in `docs/validation.md`, so nothing is hidden by it.
+
+**Reference data is stored rather than generated during testing.** CEA is a
+compiled Fortran package and would make the test suite fragile in continuous
+integration. Generating the reference file is a separate, infrequent step, and
+the resulting CSV is small enough to version. The committed file also serves as
+durable evidence of the accuracy claim.
+
+**Composition tolerances are tiered by species type.** Stable species agree to
+0.30 % on average while radicals agree to 4.8 %. This is expected rather than
+concerning: radical concentrations depend exponentially on Gibbs energies, so
+small database differences are amplified. A single tolerance would be either
+too loose for the stable species or produce false failures on radicals.
+
+**All tolerances were measured before being set, then given margin.** No
+tolerance in this change was chosen to make a test pass.
+
+## Limitations, now measured rather than asserted
+
+The two known limitations were previously documented as qualitative caveats.
+They are now quantified.
+
+**Frozen specific heats.** The ratio of equilibrium to frozen `cp` at
+stoichiometric conditions:
+
+| Temperature | 1 bar | 5 bar | 20 bar | 60 bar |
+| --- | --- | --- | --- | --- |
+| 2600 K | 2.07 | 1.57 | 1.34 | 1.23 |
+| 2900 K | 3.33 | 2.19 | 1.69 | 1.45 |
+
+Below 2000 K the difference is under one per cent. Above it the omission is
+significant, and a test now pins this expectation so it cannot be forgotten;
+that test will need updating when shifting specific heats are added.
+
+A second test asserts that the ratio falls with pressure. Dissociation
+increases the number of moles, so higher pressure suppresses it and the
+shifting contribution shrinks. Reproducing this trend is evidence that the
+reference data carries the physics rather than arbitrary numbers.
+
+**Absent nitrogen chemistry.** `h2o2.yaml` treats nitrogen as inert. Measured
+against CEA with nitrogen chemistry enabled, at phi = 0.6 and 20 bar, nitric
+oxide reaches a mole fraction of 1.9 % at 2800 K while affecting the mean
+molecular weight by 0.012 % and the frozen `cp` by 0.035 %. The thermodynamic
+consequence is two orders of magnitude below the agreement already achieved, so
+the omission is acceptable for property tables. It would not be acceptable for
+emissions work.
+
+## Notes
+
+The NASA CEA reimplementation is now installable from PyPI with `pip install
+cea`, which is what made programmatic validation across the full envelope
+practical. Earlier plans assumed reference points would be transcribed by hand
+from the CEARUN web interface.
+
+# PR-1
+Adds the first working version of the thermodynamic table layer.
+
+`ThermoTable` samples equilibrium combustion product properties on a
+structured grid of temperature, pressure and equivalence ratio, and persists
+the result to a compressed NumPy archive.
+
+## What is included
+
+- `GridSpecification`: validated sampling grid with a `linear` constructor
+- `ThermoTable.generate`: evaluates equilibrium at every node, reusing a
+  single Cantera `Solution` object
+- `ThermoTable.save` / `ThermoTable.load`: round trip through `.npz`
+- Species mole fraction fields alongside the scalar properties
+- 19 new tests covering validation, generation, physical trends and
+  persistence
+
+## Design decisions
+
+**Equivalence ratio as the mixture coordinate.** The library speaks the
+language of combustion internally. Conversion to the fuel-air ratio expected
+by engine cycle codes is deferred to the export layer, keeping the two
+concerns separate.
+
+**Non-convergent nodes are recorded as NaN rather than raising.** A single
+pathological point should not discard a long generation run. The count is
+exposed through `failed_node_count` so failures stay visible.
+
+**Species mole fractions are stored, not only scalar properties.** The size
+cost is small for the current mechanism and the composition data is needed
+for CEA validation and for any later emissions work.
+
+**The file format carries a version number.** Future format changes will fail
+loudly on old files instead of being misread silently.
+
+## Performance
+
+A 50 x 20 x 20 grid spanning 200-3000 K, 1-60 bar and phi 0.2-1.0 generates
+20,000 nodes in roughly 9 seconds with no convergence failures, producing a
+2.2 MB archive.
+
+## Not included
+
+Interpolation and cycle code export adapters are deliberately left for
+separate changes.
