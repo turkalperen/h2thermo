@@ -9,8 +9,8 @@ def main() -> None:
     """Generate, save and summarise a production-scale table."""
     grid = GridSpecification.linear(
         temperature_range=(200.0, 3000.0),
-        pressure_range=(1.0e5, 60.0e5),
-        equivalence_ratio_range=(0.2, 1.0),
+        pressure_range=(1.0e4, 60.0e5),
+        equivalence_ratio_range=(0.0, 1.0),
         shape=(50, 20, 20),
     )
     print(f"Grid shape {grid.shape}, {grid.size} nodes")

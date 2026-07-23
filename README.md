@@ -85,8 +85,8 @@ states = interpolator.lookup(
 | Input | Supported | Compared against CEA |
 | --- | --- | --- |
 | Fuel | Hydrogen (further fuels planned) | Hydrogen |
-| Temperature | 200 to 3000 K | 600 to 2900 K |
-| Pressure | 1 to 60 bar | 1 to 60 bar |
+| Temperature | 200 to 3000 K | 300 to 2900 K |
+| Pressure | 10 kPa to 60 bar | 10 kPa to 60 bar |
 | Equivalence ratio | 0 to 1.0 (0 = pure oxidizer, no fuel) | 0.2 to 1.0 |
 
 The solver returns results across the whole supported envelope. Outside the
@@ -121,8 +121,8 @@ specific heats, it is reported separately as `isentropic_exponent`.
 
 ## Validation
 
-Properties are validated against NASA CEA over 140 reference states spanning
-600 to 2900 K, 1 to 60 bar and equivalence ratios from 0.2 to 1.0. Mean
+Properties are validated against NASA CEA over 200 reference states spanning
+300 to 2900 K, 10 kPa to 60 bar and equivalence ratios from 0.2 to 1.0. Mean
 molecular weight and density agree to within 0.06 per cent, entropy to within
 0.04 per cent and frozen specific heat to within 0.15 per cent. Internal
 consistency checks on element conservation and the equation of state hold to
