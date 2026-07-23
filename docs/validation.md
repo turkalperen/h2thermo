@@ -236,6 +236,109 @@ is where the benefit is decisive, so callers with many states should pass
 arrays rather than looping.
 
 
+## 5. Compatibility with pyCycle's tabular thermo format
+
+Before an export adapter can map h2thermo's properties onto pyCycle's tabular
+thermo format, it has to be known which of h2thermo's several specific-heat
+and gamma definitions the format actually stores. Guessing would violate the
+project's own rule that documentation claims correspond to something
+measured, so this was determined by reading pyCycle's own shipped reference
+table directly, rather than by inspecting its source for comments or
+docstrings.
+
+### Method
+
+pyCycle ships a pre-generated tabular thermo file for air and Jet-A,
+`pycycle/thermo/tabular/air_jetA.pkl`, exposed as
+`pycycle.constants.AIR_JETA_TAB_SPEC`. It is a pickled dictionary of arrays:
+one-dimensional `T` (100 nodes, 100 to 3500 K), `P` (110 nodes, log-spaced
+from 1 Pa to 10 MPa) and `FAR` (20 nodes, 0 to 0.05), and three-dimensional
+`h`, `S`, `gamma`, `Cp`, `Cv`, `rho` and `R`, each shaped `[FAR, P, T]`. Units
+are SI on a mass basis, matching h2thermo's own convention. This is the file
+`pycycle.thermo.tabular.tabular_thermo.SetTotalTP` loads at run time and feeds
+directly into an OpenMDAO structured metamodel, with no further
+transformation, so measuring this file measures exactly what pyCycle's
+tabular mode uses.
+
+An earlier approach built a live pyCycle model on its CEA path and compared
+`flow:gamma`, `flow:Cp` and `flow:Cv` against independently computed
+quantities. That measures the right physics but the wrong artifact: what
+pyCycle's CEA path computes at run time is not guaranteed to be what its
+tabular export path wrote to disk. It was also fragile across pyCycle
+versions, since it depended on internal component wiring rather than a public
+interface. Reading the shipped table directly avoids both problems and is
+reproducible with
+[`scripts/probe_pycycle_definitions.py`](../scripts/probe_pycycle_definitions.py),
+which requires `pip install om-pycycle` (not a project dependency).
+
+Three discriminators were evaluated at a fixed fuel-air ratio of 0.03 and 1
+atm, across a temperature sweep:
+
+* `gamma` against `Cp / Cv`. Equality means gamma carries no information
+  beyond the two specific heats.
+* `Cp` against a finite difference of the tabulated enthalpy with respect to
+  temperature, using the table's own grid spacing. Because the composition
+  at each node was solved independently by whatever produced the table, this
+  derivative is the equilibrium specific heat if and only if `Cp` is.
+* `Cp - Cv` against `R`. The two are equal only for a mixture of fixed
+  composition.
+
+### Results
+
+| Temperature | gamma | Cp/Cv | rel. diff. | Cp [J/(kg K)] | dh/dT [J/(kg K)] | rel. diff. | Cp - Cv | R | rel. diff. |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 306 K (sanity check) | 1.3864 | 1.3864 | 9 x 10<sup>-9</sup> | 1029.8 | 1029.8 | 1 x 10<sup>-5</sup> | 287.0 | 287.0 | 1 x 10<sup>-6</sup> |
+| 2400 K | 1.2008 | 1.2035 | 0.23 % | 1920.7 | 1921.8 | 0.06 % | 324.8 | 288.6 | 12.6 % |
+| 2900 K (edge of the CEA-compared range) | 1.1513 | 1.1692 | 1.5 % | 3597.3 | 3597.2 | 0.003 % | 520.5 | 298.4 | 74.4 % |
+| 3500 K (edge of pyCycle's own table, outside both h2thermo's supported and CEA-compared ranges) | 1.1602 | 1.2042 | 3.7 % | 4966.1 | 4975.4 | 0.19 % | 842.0 | 327.6 | 157 % |
+
+At 306 K, well below where dissociation matters, all three discriminators
+collapse to near machine precision, which is the expected behaviour if the
+interpretation below is correct and would have falsified it otherwise.
+
+### Conclusion
+
+**`Cp` and `Cv` are equilibrium (shifting-composition) values.** The dh/dT
+discriminator, which measures the definition directly rather than by
+elimination, agrees with the stored `Cp` to a few parts in 10<sup>4</sup>
+across the entire sweep. `Cp - Cv` departing from `R` by more than 100 % at
+the higher end confirms the same conclusion by a second, independent route:
+a fixed-composition mixture cannot depart from `Cp - Cv = R` at all.
+
+**`gamma` is an independently evaluated isentropic exponent, not `Cp / Cv`.**
+It differs from the stored `Cp / Cv` by up to 3.7 % at 3500 K, and,
+importantly, it is *below* the equilibrium ratio rather than above it. A
+frozen-composition ratio for this mixture would sit above the equilibrium
+`Cp / Cv`, since dissociation inflates the equilibrium specific heats (and
+therefore lowers their ratio) relative to their frozen values, a pattern
+h2thermo's own tables of `cp_equilibrium`/`cp` and `cv_equilibrium`/`cv` in
+section 3 already establish. A value below the equilibrium ratio therefore
+rules out `gamma` being any kind of frozen ratio, leaving an independently
+computed isentropic exponent as the explanation consistent with all three
+discriminators.
+
+### Consequence for the export mapping
+
+This determines, rather than assumes, the property mapping used by
+`export/pycycle.py`:
+
+| pyCycle field | h2thermo source |
+| --- | --- |
+| `Cp` | `cp_equilibrium` |
+| `Cv` | `cv_equilibrium` |
+| `gamma` | `isentropic_exponent` |
+| `h`, `S`, `rho` | `enthalpy`, `entropy`, `density` |
+| `R` | not currently stored; recovered as `ct.gas_constant / mean_molecular_weight` |
+
+### Scope
+
+The decision is unambiguous everywhere it was measured, but it was measured on
+pyCycle's own table, whose envelope (100 to 3500 K, 1 Pa to 10 MPa, FAR 0 to
+0.05) is wider on both axes than the range h2thermo supports and wider still
+than the range compared against NASA CEA. The 2900 K row above is the
+relevant one for h2thermo's own compared envelope; the 3500 K row is reported
+for scale only, and no claim is made about agreement at that temperature.
+
 ## Reproducing these results
 
 ```bash
