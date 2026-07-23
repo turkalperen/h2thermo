@@ -156,10 +156,16 @@ def _prepare_reactants(
     fuel: str,
     oxidizer: Mapping[str, float],
 ) -> None:
-    """Set the composition of ``gas`` to the specified reactant mixture."""
-    if equivalence_ratio <= 0.0:
+    """Set the composition of ``gas`` to the specified reactant mixture.
+
+    An ``equivalence_ratio`` of exactly zero is accepted and sets the
+    mixture to pure oxidizer, with no fuel present. This is what pyCycle's
+    tabular thermo format calls its ``FAR = 0`` row, needed for engine
+    sections such as an inlet or compressor that never see fuel.
+    """
+    if equivalence_ratio < 0.0:
         raise ValueError(
-            f"equivalence_ratio must be positive, got {equivalence_ratio}"
+            f"equivalence_ratio must be non-negative, got {equivalence_ratio}"
         )
     gas.set_equivalence_ratio(equivalence_ratio, fuel, dict(oxidizer))
 
@@ -187,7 +193,8 @@ def equilibrium_properties(
     pressure : float
         Pressure in Pa.
     equivalence_ratio : float
-        Fuel-to-air equivalence ratio. Values below unity are fuel lean.
+        Fuel-to-air equivalence ratio. Values below unity are fuel lean. Zero
+        is accepted and represents pure oxidizer with no fuel present.
     fuel : str, optional
         Fuel species name as defined in the mechanism.
     oxidizer : mapping of str to float, optional
@@ -205,8 +212,8 @@ def equilibrium_properties(
     Raises
     ------
     ValueError
-        If ``temperature``, ``pressure`` or ``equivalence_ratio`` is not
-        strictly positive.
+        If ``temperature`` or ``pressure`` is not strictly positive, or if
+        ``equivalence_ratio`` is negative.
     """
     if temperature <= 0.0:
         raise ValueError(f"temperature must be positive, got {temperature}")
@@ -424,6 +431,15 @@ def adiabatic_flame_temperature(
     ------
     ValueError
         If ``inlet_temperature`` or ``pressure`` is not strictly positive.
+
+    Notes
+    -----
+    At ``equivalence_ratio=0.0`` there is no fuel to react, so the returned
+    temperature equals ``inlet_temperature``. If ``inlet_temperature`` is
+    below 300 K, Cantera's equilibrium solver emits a warning that the
+    temperature lies outside its valid range, because with no reaction the
+    state never moves away from that starting point. The result is still
+    correct; the warning can be ignored for this case.
 
     Examples
     --------

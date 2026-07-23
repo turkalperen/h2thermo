@@ -72,11 +72,14 @@ class GridSpecification:
     Attributes
     ----------
     temperature : numpy.ndarray
-        Strictly increasing temperature nodes in K.
+        Strictly increasing, strictly positive temperature nodes in K.
     pressure : numpy.ndarray
-        Strictly increasing pressure nodes in Pa.
+        Strictly increasing, strictly positive pressure nodes in Pa.
     equivalence_ratio : numpy.ndarray
-        Strictly increasing equivalence ratio nodes, dimensionless.
+        Strictly increasing equivalence ratio nodes, dimensionless. May start
+        at exactly zero, representing pure oxidizer with no fuel present;
+        this is the row a full engine model needs for unburned sections such
+        as an inlet or compressor.
     """
 
     temperature: np.ndarray
@@ -89,10 +92,14 @@ class GridSpecification:
             object.__setattr__(self, name, axis)
             if axis.ndim != 1 or axis.size == 0:
                 raise ValueError(f"{name} must be a non-empty one-dimensional array")
-            if np.any(axis <= 0.0):
-                raise ValueError(f"{name} values must be strictly positive")
             if np.any(np.diff(axis) <= 0.0):
                 raise ValueError(f"{name} values must be strictly increasing")
+        if np.any(self.temperature <= 0.0):
+            raise ValueError("temperature values must be strictly positive")
+        if np.any(self.pressure <= 0.0):
+            raise ValueError("pressure values must be strictly positive")
+        if np.any(self.equivalence_ratio < 0.0):
+            raise ValueError("equivalence_ratio values must be non-negative")
 
     @classmethod
     def linear(
@@ -111,7 +118,8 @@ class GridSpecification:
         pressure_range : tuple of float
             Lower and upper pressure bounds in Pa.
         equivalence_ratio_range : tuple of float
-            Lower and upper equivalence ratio bounds.
+            Lower and upper equivalence ratio bounds. The lower bound may be
+            zero, for a pure-oxidizer (no fuel) row.
         shape : tuple of int
             Number of nodes along the temperature, pressure and equivalence
             ratio axes respectively.

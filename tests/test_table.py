@@ -62,6 +62,24 @@ class TestGridSpecification:
                 equivalence_ratio=np.array([1.0]),
             )
 
+    def test_equivalence_ratio_may_start_at_zero(self):
+        """Zero (pure oxidizer) is a valid lower bound, unlike temperature
+        and pressure, which must stay strictly positive."""
+        grid = GridSpecification(
+            temperature=np.array([300.0]),
+            pressure=np.array([1.0e5]),
+            equivalence_ratio=np.array([0.0, 0.5, 1.0]),
+        )
+        assert grid.equivalence_ratio[0] == 0.0
+
+    def test_negative_equivalence_ratio_is_rejected(self):
+        with pytest.raises(ValueError):
+            GridSpecification(
+                temperature=np.array([300.0]),
+                pressure=np.array([1.0e5]),
+                equivalence_ratio=np.array([-0.1, 0.5]),
+            )
+
 
 class TestGeneration:
     """Population of the table from the equilibrium solver."""
@@ -137,6 +155,41 @@ class TestPhysicalBehaviour:
         """Radical content must increase along the temperature axis."""
         hydroxyl = table.mole_fraction_of("OH")
         assert np.all(hydroxyl[-1, ...] > hydroxyl[0, ...])
+
+
+class TestPureAirRow:
+    """Generation over a grid whose equivalence_ratio axis includes zero."""
+
+    @staticmethod
+    @pytest.fixture(scope="class")
+    def grid_with_pure_air() -> GridSpecification:
+        return GridSpecification.linear(
+            temperature_range=(300.0, 2900.0),
+            pressure_range=(1.0e5, 20.0e5),
+            equivalence_ratio_range=(0.0, 1.0),
+            shape=(3, 2, 3),
+        )
+
+    @staticmethod
+    @pytest.fixture(scope="class")
+    def table_with_pure_air(grid_with_pure_air: GridSpecification) -> ThermoTable:
+        return ThermoTable.generate(grid_with_pure_air)
+
+    def test_every_node_still_converges(self, table_with_pure_air):
+        assert table_with_pure_air.failed_node_count == 0
+
+    def test_pure_air_slice_has_no_fuel_derived_species(self, table_with_pure_air):
+        """The k=0 slice is equivalence_ratio=0.0: no hydrogen anywhere."""
+        for species in ("H2", "H", "OH", "H2O"):
+            fraction = table_with_pure_air.mole_fraction_of(species)
+            assert np.all(fraction[:, :, 0] < 1.0e-12)
+
+    def test_pure_air_slice_is_mostly_oxygen_and_nitrogen(self, table_with_pure_air):
+        oxygen = table_with_pure_air.mole_fraction_of("O2")[:, :, 0]
+        nitrogen = table_with_pure_air.mole_fraction_of("N2")[:, :, 0]
+        # At 2900 K a few per cent of O2 dissociates into atomic O, so the
+        # bound is loosened at the hot end rather than tightened artificially.
+        assert np.all(oxygen + nitrogen > 0.95)
 
 
 class TestPersistence:

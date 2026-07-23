@@ -1,3 +1,80 @@
+# PR-6
+
+Allows `equivalence_ratio = 0.0` (pure oxidizer, no fuel present) throughout
+the equilibrium and table layers, closing the limitation recorded in PR-5:
+`GridSpecification` rejected a zero equivalence ratio outright, so an
+exported table could never carry pyCycle's `FAR = 0` row, which a full
+engine model needs for unburned sections such as an inlet or compressor.
+
+## What is included
+
+- `equilibrium._prepare_reactants` now rejects only negative equivalence
+  ratios; zero is accepted and sets the mixture to pure oxidizer.
+- `GridSpecification` accepts an equivalence-ratio axis starting at 0.0,
+  while temperature and pressure remain strictly positive as before.
+- `h2thermo.export.pycycle`'s module docstring is corrected: the `FAR = 0`
+  row is available whenever the caller's grid includes 0.0, rather than
+  being unconditionally absent.
+- 13 new tests: composition and specific heat of the pure-oxidizer state,
+  its high-temperature dissociation, `equilibrium_specific_heats` and
+  `adiabatic_flame_temperature` at zero, rejection of negative ratios,
+  `GridSpecification` boundary tests, table generation over a grid that
+  includes the zero row, and export of that row's `FAR = 0` entry.
+
+## Why zero and not some small positive floor
+
+An equivalence ratio of exactly zero has an unambiguous physical meaning,
+pure oxidizer, whereas a small positive floor would be an arbitrary
+approximation to the same state. Cantera's `set_equivalence_ratio` accepts
+zero directly and returns the oxidizer composition exactly, so there was no
+numerical reason to avoid the boundary. Negative values remain rejected;
+they correspond to nothing physical.
+
+## Verified rather than assumed
+
+Accepting zero without raising was the easy part; what needed checking was
+whether the result is physically correct.
+
+- At 300 K the pure-oxidizer mole fractions match the `DRY_AIR` molar ratio
+  (1 : 3.76) to within floating point precision, and the specific heat is
+  1010 J/(kg K) against a handbook value of 1005 J/(kg K) for dry air, 0.5%
+  high. The difference is expected: `DRY_AIR` is a simplified two-component
+  mixture with no argon.
+- At 2900 K the same state shows measurable O2 dissociation into atomic O,
+  the same qualitative high-temperature behaviour the library already
+  reports for fuel-air mixtures, evidence that the equilibrium solver is
+  treating oxygen chemistry consistently regardless of whether fuel is
+  present.
+- `adiabatic_flame_temperature` at zero correctly returns the inlet
+  temperature unchanged, since there is no fuel to react. Below 300 K inlet,
+  Cantera's `HP` solver emits a range warning, because with no reaction the
+  state never moves away from the sub-300 K starting point. This is a
+  property of that one function's iterative path, not of the library's
+  primary path: `ThermoTable.generate` always calls the direct `TP` solver
+  at the requested grid temperature, which was checked separately down to
+  200 K, the bottom of the currently supported envelope, and does not warn
+  there for any equivalence ratio, zero included.
+
+## What was deliberately left alone
+
+`h2thermo.interpolation` required no changes. The equivalence-ratio axis is
+handled the same way as temperature and pressure throughout that module, so
+a grid with a zero-valued first node interpolates correctly without any
+special case. This was confirmed by reasoning about the code path rather
+than by a new test, since the existing interpolation test suite already
+exercises arbitrary axis values.
+
+No new CEA reference points were added for the pure-air state. The stored
+140-point reference set validates hydrogen combustion products, which is
+not what a fuel-free mixture is; comparing it against a handbook air
+property instead of CEA is the more honest reference for what is actually
+being checked.
+
+## Test plan
+
+- [x] `pytest` -- 1625 passed
+- [x] `flake8 src tests scripts examples` -- clean
+
 # PR-5
 ## Summary
 - Determine, by reading pyCycle's own shipped reference table (`pycycle.constants.AIR_JETA_TAB_SPEC`) rather than assuming, that its tabular thermo format stores equilibrium (shifting-composition) `Cp`/`Cv` and an independently evaluated isentropic exponent as `gamma` -- not the frozen values or their ratio. Measured with `scripts/probe_pycycle_definitions.py` and recorded in `docs/validation.md` section 5, replacing an earlier version of that script that drove a live, version-fragile OpenMDAO model instead of the shipped artifact.

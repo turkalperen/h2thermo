@@ -27,11 +27,15 @@ Two conversions happen that are not simple renames:
   molecular weight through ``R = R_universal / M``, the same relation
   :mod:`h2thermo.interpolation` uses to recover density.
 
-Known limitation: :class:`~h2thermo.table.GridSpecification` requires a
-strictly positive equivalence ratio, so an exported table never has a
-``FAR = 0`` (pure air) row. pyCycle's own air/Jet-A table does have one, and
-would be needed for a full engine model that includes unburned sections such
-as an inlet or compressor.
+:class:`~h2thermo.table.GridSpecification` accepts an equivalence ratio of
+zero, representing pure oxidizer with no fuel present. Including 0.0 as the
+lowest node of the equivalence-ratio axis before calling
+:meth:`~h2thermo.table.ThermoTable.generate` produces a ``FAR = 0`` row on
+export, matching pyCycle's own air/Jet-A table and giving a full engine
+model the pure-air state it needs for unburned sections such as an inlet or
+compressor. A table generated without 0.0 on that axis will not have this
+row; this is a property of the table passed in; :func:`write_pycycle_table`
+does not add or require it.
 
 pyCycle's tabular thermo format is a pickle file, which is not a safe format
 to load from an untrusted source. Writing one is required for compatibility
