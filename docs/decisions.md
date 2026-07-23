@@ -1,3 +1,70 @@
+# PR-7
+
+Extends the NASA CEA validation envelope down to 10 kPa (0.1 bar) and 300 K,
+closing the gap left after PR-5: the previously validated envelope (1-60 bar,
+600-2900 K) sat entirely above the ~22.6 kPa static pressure at 11 km
+altitude that a compressor or inlet section would actually see, and left the
+library's own claimed 200 K lower temperature bound entirely unvalidated
+below 600 K.
+
+## What is included
+
+- `scripts/generate_cea_reference.py`: added a 0.1 bar pressure tier and a
+  300 K temperature tier to the reference sweep, taking it from 140 to 200
+  stored states.
+- `data/cea_reference_points.csv`: regenerated with `pip install cea` at the
+  extended envelope; all 200 points converged in both CEA and h2thermo, none
+  were dropped.
+- `examples/generate_table.py`: the full-envelope example table now spans
+  10 kPa to 60 bar and equivalence ratio 0 to 1.0 (previously 1-60 bar and
+  0.2-1.0), matching what the library actually supports after PR-6. All
+  20,000 nodes converge.
+- `docs/validation.md` and `README.md` updated throughout with the figures
+  measured on the extended set, replacing the PR-2/PR-4 figures rather than
+  appending alongside them.
+- Four new tests in `tests/test_equilibrium.py` pinning convergence and the
+  expected dissociation behaviour at 10 kPa.
+
+## What the extension changed, and what it didn't
+
+Bulk properties (molecular weight, density, entropy, frozen specific heats,
+isentropic exponent) are essentially unchanged: all within a few thousandths
+of a percent of the previous figures. This is expected; these depend on the
+overall stoichiometry and the major species, which the two databases already
+agreed on closely.
+
+The equilibrium (shifting-composition) specific heats are the exception:
+maximum deviation from CEA roughly doubled, from 0.556% / 0.630% to 1.176% /
+1.167% for cp/cv respectively. Every point driving that maximum sits at the
+new 0.1 bar tier and 2200 K or above. This is not a new problem; it is the
+one PR-2 already identified and quantified, observed for the first time at a
+pressure low enough to make it visible at this magnitude: radical
+concentrations, and therefore the shifting contribution to the specific
+heats, depend exponentially on Gibbs energies the two databases do not
+reproduce identically. The ratio of equilibrium to frozen cp at 2900 K and
+0.1 bar is 7.13, the largest anywhere in the tabulated envelope, against
+3.33 at 1 bar; the CEA deviation follows the same shape. The fixed test
+tolerance (2%, set with margin in PR-2) already absorbed this without being
+loosened.
+
+## Why 300 K and not lower
+
+200 K remains the library's stated lower temperature bound, but no CEA
+points were added there. The 200-300 K decade is a small extrapolation
+beyond the now-validated range, and CEA's own equilibrium solver already
+prints a low-temperature range warning close to that boundary in an
+adjacent code path (see PR-6's note on `adiabatic_flame_temperature`), so
+points there would need closer scrutiny than a routine extension warranted.
+The gap is stated in the Scope table rather than left implicit.
+
+## Test plan
+
+- [x] `pip install cea && python scripts/generate_cea_reference.py` -- 200
+      points written, 0 CEA convergence failures
+- [x] `python examples/generate_table.py` -- 20,000 nodes, 0 non-convergent
+- [x] `pytest` -- 2291 passed
+- [x] `flake8 src tests scripts examples` -- clean
+
 # PR-6
 
 Allows `equivalence_ratio = 0.0` (pure oxidizer, no fuel present) throughout

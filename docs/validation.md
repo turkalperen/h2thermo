@@ -16,13 +16,14 @@ are cheap, require no external software, and run on every commit.
 
 | Check | Maximum relative error |
 | --- | --- |
-| Element conservation (H, O and N atom ratios against the reactants) | 4.8 x 10<sup>-10</sup> |
+| Element conservation (H, O and N atom ratios against the reactants) | 1.2 x 10<sup>-9</sup> |
 | Ideal gas equation of state, rho = p M / (R T) | 5.6 x 10<sup>-10</sup> |
 | Ratio of specific heats, gamma = cp / cv | 0 |
 | Mole fractions summing to unity | < 10<sup>-9</sup> |
 
 All four agree to machine precision, evaluated over a 50 x 20 x 20 grid
-spanning 200 to 3000 K, 1 to 60 bar and equivalence ratios from 0.2 to 1.0.
+spanning 200 to 3000 K, 10 kPa to 60 bar and equivalence ratios from 0 to 1.0,
+including the pure-air (zero equivalence ratio) row.
 
 ## 2. Comparison against NASA CEA
 
@@ -35,8 +36,11 @@ claim of this project.
 
 Reference states were generated with the NASA CEA Python package and are stored
 in [`data/cea_reference_points.csv`](../data/cea_reference_points.csv). The
-grid covers seven temperatures from 600 to 2900 K, four pressures from 1 to
-60 bar and five equivalence ratios from 0.2 to 1.0, giving 140 states.
+grid covers eight temperatures from 300 to 2900 K, five pressures from 0.1 to
+60 bar and five equivalence ratios from 0.2 to 1.0, giving 200 states. The
+0.1 bar (10 kPa) tier is close to the ~22.6 kPa static pressure at 11 km
+altitude, the low end of the range a compressor or combustor inlet would see
+in practice.
 
 The CEA product species list was restricted to the nine species present in
 Cantera's `h2o2.yaml` mechanism. Without this restriction, differences in the
@@ -57,26 +61,36 @@ python scripts/generate_cea_reference.py
 | Property | Maximum relative deviation | Mean |
 | --- | --- | --- |
 | Mean molecular weight | 0.052 % | 0.011 % |
-| Density | 0.052 % | 0.012 % |
+| Density | 0.052 % | 0.011 % |
 | Specific entropy | 0.032 % | 0.017 % |
-| Frozen specific heat at constant pressure | 0.147 % | 0.060 % |
-| Frozen specific heat at constant volume | 0.196 % | 0.080 % |
-| Equilibrium specific heat at constant pressure | 0.556 % | 0.207 % |
-| Equilibrium specific heat at constant volume | 0.630 % | 0.236 % |
-| Isentropic exponent | 0.080 % | 0.032 % |
-| Specific enthalpy | 11.4 kJ/kg absolute | 2.2 kJ/kg |
+| Frozen specific heat at constant pressure | 0.147 % | 0.067 % |
+| Frozen specific heat at constant volume | 0.196 % | 0.091 % |
+| Equilibrium specific heat at constant pressure | 1.176 % | 0.221 % |
+| Equilibrium specific heat at constant volume | 1.167 % | 0.253 % |
+| Isentropic exponent | 0.084 % | 0.034 % |
+| Specific enthalpy | 11.3 kJ/kg absolute | 2.1 kJ/kg |
 
 Enthalpy is reported as an absolute deviation because the absolute specific
 enthalpy passes through zero within the tabulated range, which makes a relative
-measure meaningless. For scale, 11.4 kJ/kg corresponds to roughly seven kelvin
+measure meaningless. For scale, 11.3 kJ/kg corresponds to roughly seven kelvin
 of equivalent temperature error at a representative specific heat.
+
+The equilibrium specific heats agree more than twice as loosely as they did
+before the 0.1 bar tier was added: the worst points are all at 0.1 bar and
+2200-2900 K, where dissociation, and therefore the shifting-composition
+contribution to `cp`/`cv`, is largest. This is the same effect the ratio table
+in section 3 quantifies directly, not a new source of error: the two
+thermodynamic databases agree closely on the underlying frozen properties, so
+their disagreement is amplified wherever the equilibrium and frozen values
+diverge most from each other. The tolerance in the test suite already carried
+enough margin to absorb this without a change.
 
 ### Composition
 
 | Species group | Maximum relative deviation | Mean |
 | --- | --- | --- |
-| Stable species (H2O, N2, O2, H2) | 3.0 % | 0.30 % |
-| Radicals (OH, H, O) | 12.6 % | 4.8 % |
+| Stable species (H2O, N2, O2, H2) | 3.0 % | 0.29 % |
+| Radicals (OH, H, O) | 12.6 % | 4.7 % |
 
 States with a mole fraction below 10<sup>-4</sup> are excluded, since their
 relative deviation is dominated by round off and they carry no practical
@@ -117,10 +131,17 @@ closest agreement of any quantity in this library.
 
 Ratio of equilibrium to frozen specific heat at stoichiometric conditions:
 
-| Temperature | 1 bar | 5 bar | 20 bar | 60 bar |
-| --- | --- | --- | --- | --- |
-| 2600 K | 2.07 | 1.57 | 1.34 | 1.23 |
-| 2900 K | 3.33 | 2.19 | 1.69 | 1.45 |
+| Temperature | 0.1 bar | 1 bar | 5 bar | 20 bar | 60 bar |
+| --- | --- | --- | --- | --- | --- |
+| 2600 K | 3.85 | 2.07 | 1.57 | 1.34 | 1.23 |
+| 2900 K | 7.13 | 3.33 | 2.19 | 1.69 | 1.45 |
+
+At 0.1 bar, the altitude-relevant pressure added for this range, the
+equilibrium value reaches more than seven times the frozen one at 2900 K.
+This is also why the CEA agreement on the equilibrium specific heats in
+section 2 loosens at that corner: the larger the shifting contribution, the
+more the result depends on radical thermodynamics the two databases
+reproduce least closely.
 
 Below roughly 2000 K the two differ by less than one per cent. Above that the
 choice between them matters, and callers should pick the definition that suits

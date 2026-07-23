@@ -255,3 +255,37 @@ class TestEquilibriumSpecificHeats:
     def test_invalid_inputs_are_rejected(self, gas, kwargs):
         with pytest.raises(ValueError):
             equilibrium_specific_heats(gas=gas, **kwargs)
+
+
+class TestLowPressureEnvelope:
+    """0.1 bar (10 kPa), close to the ~22.6 kPa static pressure at 11 km
+    altitude and the lowest tier now covered by the CEA reference points."""
+
+    LOW_PRESSURE = 1.0e4  # Pa
+
+    @pytest.mark.parametrize("temperature", [300.0, 1400.0, 2200.0, 2900.0])
+    def test_equilibrium_properties_converges(self, gas, temperature):
+        state = equilibrium_properties(
+            temperature, self.LOW_PRESSURE, equivalence_ratio=1.0, gas=gas
+        )
+        assert state.cp > 0.0
+        assert state.density > 0.0
+
+    def test_equilibrium_specific_heats_converges_at_the_hottest_corner(self, gas):
+        """The largest equilibrium/frozen gap in the library sits here; see
+        docs/validation.md section 3."""
+        shifting = equilibrium_specific_heats(
+            2900.0, self.LOW_PRESSURE, equivalence_ratio=1.0, gas=gas
+        )
+        assert shifting.cp > shifting.cv > 0.0
+        assert 1.0 < shifting.isentropic_exponent < 1.7
+
+    def test_dissociation_is_more_pronounced_than_at_one_atmosphere(self, gas):
+        """Lower pressure suppresses recombination, per Le Chatelier."""
+        low = equilibrium_properties(
+            2900.0, self.LOW_PRESSURE, equivalence_ratio=1.0, gas=gas
+        )
+        atmospheric = equilibrium_properties(
+            2900.0, AMBIENT_PRESSURE, equivalence_ratio=1.0, gas=gas
+        )
+        assert low.mole_fractions["OH"] > atmospheric.mole_fractions["OH"]
