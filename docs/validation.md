@@ -360,6 +360,120 @@ than the range compared against NASA CEA. The 2900 K row above is the
 relevant one for h2thermo's own compared envelope; the 3500 K row is reported
 for scale only, and no claim is made about agreement at that temperature.
 
+## 6. Cross-validation of the pure-air state against pyCycle
+
+Section 2 validates hydrogen-air combustion products against NASA CEA. The
+pure-air state added in PR-6 (`equivalence_ratio=0.0`) burns no fuel, so it
+is not covered by that reference set. This section checks it a different
+way: directly against pyCycle's own shipped `FAR = 0` row in
+`pycycle.constants.AIR_JETA_TAB_SPEC`, the same file used in section 5. This
+is a second channel entirely independent of CEA, at the cost of comparing
+against a table whose own provenance is unknown rather than a named
+reference implementation.
+
+### Method
+
+At each probed grid node, h2thermo's `equilibrium_properties` and
+`equilibrium_specific_heats` are evaluated at `equivalence_ratio=0.0` and
+mapped to pyCycle's field names using the same convention established in
+section 5 (`Cp`/`Cv` as the equilibrium specific heats, `gamma` as the
+isentropic exponent, `R` recovered from mean molecular weight). Where the two
+disagree, NASA CEA is brought in as a third, independent opinion rather than
+leaving the disagreement unresolved; CEA's solver hits a singular update
+matrix at exactly zero fuel, so a proxy equivalence ratio of 10<sup>-4</sup>
+stands in for pure air, checked for convergence down to 10<sup>-6</sup> with
+the result stable to 0.02%. Reproducible with
+[`scripts/compare_pure_air_to_pycycle.py`](../scripts/compare_pure_air_to_pycycle.py),
+which requires `pip install om-pycycle` and, for the tie-breaker,
+`pip install cea`.
+
+### Realistic operating range: close agreement
+
+An unburned-air row exists for sections that never see fuel: an inlet, a
+fan, a compressor, cooling bypass air. None of those reach anywhere near
+2900 K; a high-pressure-ratio compressor discharge is a more representative
+upper bound. Swept at 5 bar:
+
+| Temperature | Cp deviation | Gamma deviation |
+| --- | --- | --- |
+| 300 K | 0.55 % | 0.06 % |
+| 600 K | 0.58 % | 0.07 % |
+| 900 K | 0.75 % | 0.12 % |
+| 1200 K | 0.27 % | 0.04 % |
+
+Across the range a real air-breathing section actually operates in, h2thermo
+agrees with pyCycle's own reference data about as closely as section 2 shows
+it agreeing with CEA on combustion products.
+
+### Bulk properties across the full pressure range, at 2900 K
+
+Pushed to the hottest node shared by both tables, to see where agreement
+degrades:
+
+| Property | 0.1 bar | 1 bar | 5 bar | 20 bar | 60 bar |
+| --- | --- | --- | --- | --- | --- |
+| Density | 0.65 % | 0.48 % | 0.44 % | 0.42 % | 0.41 % |
+| Specific gas constant | 0.65 % | 0.48 % | 0.44 % | 0.42 % | 0.42 % |
+| Specific entropy | 0.12 % | 0.07 % | 0.14 % | 0.19 % | 0.22 % |
+| Specific enthalpy | 0.70 % | 2.13 % | 2.60 % | 2.80 % | 2.90 % |
+| Isentropic exponent | 0.09 % | 0.72 % | 1.39 % | 1.92 % | 2.28 % |
+
+Density and R sit at a roughly constant ~0.4-0.65%, and the cause is
+identifiable: `DRY_AIR`, h2thermo's default oxidizer, is a simplified
+two-component (O2, N2) mixture that omits argon, at 0.93% of real air by
+mole. At 300 K and 1 bar, a low-dissociation state where the two tables
+should already agree closely on frozen properties, pyCycle's implied mean
+molecular weight is 28.965 kg/kmol, matching the handbook value for real dry
+air (28.9647) to four figures, against 28.851 kg/kmol for h2thermo's
+argon-free `DRY_AIR`. Substituting a realistic argon-inclusive oxidizer
+closes the gap: the Cp deviation at that state falls from 0.55% to 0.09%,
+confirmed with `check_argon_hypothesis()` in the comparison script.
+
+### Resolved: pyCycle's table, not h2thermo, is the less accurate one above 1500 K
+
+The equilibrium `Cp`/`Cv` deviation between h2thermo and pyCycle is small
+(under 1%) up to about 1200 K and grows to 5-10% by 2200-2900 K. Two
+explanations were checked and ruled out rather than assumed. The argon
+composition difference does not explain it: substituting a realistic
+argon-inclusive oxidizer at the hottest, highest-pressure node makes the
+deviation slightly worse (8.00% to 8.69%), not better. Dissociation strength
+does not explain it either: at 100 bar, the highest pressure pyCycle's table
+stores, O2 dissociation is almost fully suppressed (h2thermo's own
+atomic-oxygen mole fraction there is 0.0039), yet pyCycle's `Cp` still
+exceeds h2thermo's frozen `cp` by 19.5%. A gap that large with essentially no
+dissociation on either side rules out a shifting-composition artifact.
+
+With both plausible causes eliminated, the disagreement was resolved rather
+than left open, by bringing in NASA CEA as a third, independent opinion at
+every state in both sweeps:
+
+| State | cp h2thermo | cp pyCycle | cp CEA | \|h2thermo - CEA\| | \|pyCycle - CEA\| |
+| --- | --- | --- | --- | --- | --- |
+| 2900 K, 0.1 bar | 4404.05 | 4242.62 | 4390.09 | 0.32 % | 3.36 % |
+| 2900 K, 1 bar | 2453.85 | 2488.46 | 2447.01 | 0.28 % | 1.69 % |
+| 2900 K, 5 bar | 1835.19 | 1927.86 | 1831.81 | 0.18 % | 5.24 % |
+| 2900 K, 20 bar | 1580.66 | 1696.43 | 1578.83 | 0.12 % | 7.45 % |
+| 2900 K, 60 bar | 1457.52 | 1584.27 | 1456.49 | 0.07 % | 8.77 % |
+| 300-2900 K, 5 bar (9 points) | -- | -- | -- | 0.02-0.18 % | 0.34-7.23 % |
+
+Across all 14 states where CEA converged, h2thermo's mean deviation from CEA
+is 0.13%, essentially the same level of agreement section 2 already
+established for combustion products. pyCycle's mean deviation from the same
+reference is 3.62%, and reaches 8.8% at the hottest, highest-pressure node.
+h2thermo is not the source of the disagreement documented above; pyCycle's
+own shipped air table is the less accurate of the two at this corner, most
+likely because it was built and tuned around realistic combustion
+conditions and was never validated at temperatures no unburned air actually
+reaches.
+
+This does not change the practical conclusion. No inlet, fan or compressor
+carries unburned air anywhere close to 1500 K in an actual engine; air only
+reaches that temperature after combustion, at which point
+`equivalence_ratio` is no longer zero and the state is already covered by
+section 2's CEA comparison. What changes is which library a caller should
+trust if they do probe that corner: h2thermo, not pyCycle's own reference
+table.
+
 ## Reproducing these results
 
 ```bash

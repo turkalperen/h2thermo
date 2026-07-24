@@ -1,3 +1,79 @@
+# PR-8
+
+Cross-validates the pure-air state added in PR-6 against pyCycle's own
+`FAR = 0` row, a channel independent of the hydrogen-combustion NASA CEA
+reference set in section 2, which has nothing to say about a fuel-free
+mixture. Where h2thermo and pyCycle disagreed, NASA CEA was brought back in
+as a third opinion to settle which one was actually accurate, rather than
+leaving two disagreeing tables undifferentiated.
+
+## What is included
+
+- `scripts/compare_pure_air_to_pycycle.py`: reads
+  `pycycle.constants.AIR_JETA_TAB_SPEC` directly (the same artifact
+  `scripts/probe_pycycle_definitions.py` uses) and compares it against
+  h2thermo at matching grid nodes, using the property mapping established
+  in PR-5. Includes a temperature sweep at a realistic pressure, a pressure
+  sweep at the hottest shared temperature, a targeted check of whether
+  `DRY_AIR`'s missing argon explains the deviations found, and an optional
+  NASA CEA tie-breaker (`pip install cea`) run at every probed state.
+- `docs/validation.md` section 6 and a pointer in `README.md`'s Validation
+  section, with the results below.
+
+## Result: good agreement where the row is actually used
+
+Below about 1200 K, at 5 bar, Cp agrees with pyCycle's own table to within
+0.3-0.9% and gamma to within 0.04-0.12% -- comparable to the CEA agreement
+on combustion products in section 2. This is the range that matters: an
+inlet, fan or compressor never carries unburned air anywhere near 2900 K.
+
+## Above ~1500 K: two hypotheses ruled out, then resolved with a third opinion
+
+The Cp/Cv deviation between h2thermo and pyCycle grows above roughly 1500 K,
+reaching 5-10% by 2200-2900 K. Two explanations were checked and ruled out:
+
+- **Argon.** `DRY_AIR` omits it; real air is 0.93% argon by mole. At 300 K,
+  1 bar this fully explains a smaller deviation seen there: pyCycle's
+  implied molecular weight (28.965 kg/kmol) matches the handbook value for
+  real dry air almost exactly, and substituting a realistic argon-inclusive
+  oxidizer drops the Cp deviation from 0.55% to 0.09%. At the hot,
+  high-pressure corner it does not help -- the deviation gets marginally
+  worse (8.00% to 8.69%) with argon included.
+- **Dissociation strength.** At 100 bar, the highest pressure pyCycle's
+  table stores, O2 dissociation is nearly fully suppressed (h2thermo's own
+  atomic-oxygen mole fraction is 0.0039), yet pyCycle's Cp still exceeds
+  h2thermo's frozen cp by 19.5%. A gap that large with essentially no
+  dissociation on either side cannot be a dissociation-modelling artifact.
+
+With neither hypothesis holding, the question of which table is actually
+right was answerable, not just askable: CEA can solve pure air too, given a
+proxy equivalence ratio of 10<sup>-4</sup> to route around a singular update
+matrix at exactly zero fuel (stable to 0.02% down to 10<sup>-6</sup>, checked
+before trusting it). Run at all 14 states in both sweeps, h2thermo's mean
+deviation from CEA is 0.13%; pyCycle's is 3.62%, reaching 8.8% at the
+hottest, highest-pressure node. **h2thermo is not the source of the
+disagreement; pyCycle's own shipped air table is the less accurate one at
+this corner.**
+
+## Why the practical conclusion is unchanged even though the diagnosis is
+
+No inlet, fan or compressor carries unburned air anywhere close to 1500 K in
+an actual engine; air only reaches that temperature after combustion, at
+which point equivalence_ratio is no longer zero and the state is already
+covered by section 2's CEA comparison. The high-temperature pure-air corner
+remains a mathematically valid but physically unreachable input. What the
+CEA tie-breaker changes is not whether this matters operationally, but who
+should be trusted if someone does probe that corner: h2thermo, not pyCycle's
+own reference table.
+
+## Test plan
+
+- [x] `pip install om-pycycle && python scripts/compare_pure_air_to_pycycle.py`
+      -- reproduces every figure above
+- [x] `pip install cea` additionally installed -- tie-breaker section runs
+      and reproduces the 0.13%/3.62% means
+- [x] `flake8 src tests scripts examples` -- clean
+
 # PR-7
 
 Extends the NASA CEA validation envelope down to 10 kPa (0.1 bar) and 300 K,

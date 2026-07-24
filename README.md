@@ -129,8 +129,13 @@ consistency checks on element conservation and the equation of state hold to
 machine precision.
 
 Interpolation adds well under 0.05 per cent on top of that, an order of
-magnitude below the agreement with CEA. Full results, including the measured
-effect of the inert-nitrogen treatment, are in [docs/validation.md](docs/validation.md).
+magnitude below the agreement with CEA. The pure-air state, not covered by
+the hydrogen-combustion reference set above, is checked directly against
+pyCycle's own reference table instead; agreement is within 1 per cent across
+the range an inlet or compressor actually operates in, and CEA was used to
+confirm that a larger gap at temperatures no unburned air ever reaches comes
+from pyCycle's own table, not from h2thermo. Full results, including the
+measured effect of the inert-nitrogen treatment, are in [docs/validation.md](docs/validation.md).
 
 ```bash
 pytest
