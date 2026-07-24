@@ -1,3 +1,32 @@
+# PR-9
+
+Closes four small gaps left over from the manual README sync after PR-8.
+None of them change behaviour; all of them change what the README claims
+about the library.
+
+## What changed
+
+- **Known limitation surfaced.** The absent-nitrogen-chemistry finding from
+  section 3 of `docs/validation.md` was already measured but only reachable
+  through a generic pointer. The README now states the limitation directly
+  and links to the specific section.
+- **"Designed to extend" claim removed.** The opening paragraph asserted the
+  architecture generalises to other fuels before a second fuel had ever been
+  added. Replaced with a statement of what is actually implemented today,
+  pointing to the roadmap for what is not.
+- **Ideal gas assumption stated.** The Method section described the solver
+  and mechanism but never named the equation of state. It now does, with a
+  pointer to the internal consistency check that measures how well the
+  assumption holds.
+- **Test count added.** The suite has grown to 2,291 cases through PR-6, 7
+  and 8; the README gave no sense of its size. Stated next to the `pytest`
+  invocation it already showed.
+
+## Not included
+
+No source code changed. This is documentation only, so it carries no test
+or performance impact.
+
 # PR-8
 
 Cross-validates the pure-air state added in PR-6 against pyCycle's own

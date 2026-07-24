@@ -3,8 +3,9 @@
 [![tests](https://github.com/turkalperen/h2thermo/actions/workflows/tests.yml/badge.svg)](https://github.com/turkalperen/h2thermo/actions/workflows/tests.yml)
 
 Equilibrium thermodynamic property tables for hydrogen-fuelled gas turbine
-cycle analysis. The architecture is designed to extend to other alternative
-fuels, including sustainable aviation fuels, ammonia and methane.
+cycle analysis, validated against NASA CEA and exportable to pyCycle's
+tabular format. Hydrogen is the only fuel implemented so far; sustainable
+aviation fuels, ammonia and methane are on the roadmap below.
 
 > **Status: early development.** Table generation, interpolated lookup,
 > validation against NASA CEA and a pyCycle export adapter are complete for
@@ -104,7 +105,10 @@ Equilibrium compositions are obtained by Gibbs free energy minimisation using
 Cantera's solver, which follows the same thermodynamic principle as NASA CEA.
 The `h2o2.yaml` mechanism distributed with Cantera is used; it is based on the
 hydrogen kinetics of Burke et al. (2012) and includes the dissociation species
-that matter at high temperature.
+that matter at high temperature. All species are treated as ideal gases, the
+phase model `h2o2.yaml` defines in Cantera; the internal consistency check
+against `rho = pM/(RT)` in [docs/validation.md](docs/validation.md) holds to
+machine precision across the whole supported envelope, up to 60 bar.
 
 ### Frozen and equilibrium specific heats
 
@@ -134,8 +138,18 @@ the hydrogen-combustion reference set above, is checked directly against
 pyCycle's own reference table instead; agreement is within 1 per cent across
 the range an inlet or compressor actually operates in, and CEA was used to
 confirm that a larger gap at temperatures no unburned air ever reaches comes
-from pyCycle's own table, not from h2thermo. Full results, including the
-measured effect of the inert-nitrogen treatment, are in [docs/validation.md](docs/validation.md).
+from pyCycle's own table, not from h2thermo.
+
+**Known limitation:** the `h2o2.yaml` mechanism treats nitrogen as inert, so
+no nitric oxide forms. The measured effect on bulk properties is two orders
+of magnitude below the CEA agreement above, acceptable for property tables
+but not for emissions modelling.
+
+Full results are in [docs/validation.md](docs/validation.md), including the
+[known limitations](docs/validation.md#3-known-limitations) in detail and the
+pure-air cross-validation against pyCycle's own table.
+
+The test suite currently has 2,291 cases, covering the comparisons above:
 
 ```bash
 pytest
